@@ -365,6 +365,66 @@ def parse_table_and_add_to_graph(table_name: str, headers: List[str], rows: List
                         
                     graph.add_relationship(src_label.strip(), src_name.strip(), tgt_label.strip(), tgt_name.strip(), rel_type)
 
+def parse_generic_table_to_graph(repo_name: str, table_name: str, headers: List[str], rows: List[List[Any]], graph) -> int:
+    display_name = table_name.rsplit("/", 1)[-1]
+    
+    # 1. Create a Table node
+    graph.add_node("Table", {
+        "name": display_name,
+        "type": "Spreadsheet Table",
+        "columns": ", ".join(headers),
+        "rows_count": len(rows)
+    })
+    graph.add_relationship("Repository", repo_name, "Table", display_name, "CONTAINS")
+    
+    nodes_added = 1
+    
+    # 2. Add each row as a Row node
+    for idx, r in enumerate(rows):
+        row_props = {}
+        for col_idx, val in enumerate(r):
+            if val is not None and col_idx < len(headers):
+                col_name = headers[col_idx]
+                if col_name:
+                    row_props[col_name] = str(val).strip()
+                    
+        if not row_props:
+            continue
+            
+        id_keys = ["id", "name", "title", "workflow", "feature", "key", "number", "requirement"]
+        row_name = ""
+        for key in id_keys:
+            match_col = next((k for k in row_props.keys() if key in k.lower()), None)
+            if match_col:
+                row_name = row_props[match_col]
+                break
+                
+        if not row_name:
+            row_name = f"Row {idx + 1}"
+            
+        row_node_id = f"{display_name} · Row {idx + 1}"
+        row_props["name"] = row_name
+        row_props["id"] = row_node_id
+        row_props["table"] = display_name
+        
+        # Add node
+        graph.add_node("Row", row_props)
+        nodes_added += 1
+        
+        # Link Table -> HAS_ROW -> Row
+        graph.add_relationship("Table", display_name, "Row", row_name, "HAS_ROW")
+        
+        # Handle explicit relations if any columns match relations
+        rel_keys = ["depends", "parent", "related", "links", "uses", "requires", "next"]
+        for key in rel_keys:
+            match_col = next((k for k in row_props.keys() if key in k.lower()), None)
+            if match_col:
+                target_val = row_props[match_col]
+                if target_val and str(target_val).lower() not in ("none", "n/a", "", "null"):
+                    graph.add_relationship("Row", row_name, "Row", str(target_val).strip(), "LINKS_TO")
+                    
+    return nodes_added
+
 @app.post("/api/v1/repositories/upload", tags=["Repository Intake"])
 async def upload_repository_zip(request: Request, filename: str):
     """Stage and inspect a local repository uploaded as a ZIP archive, adding it to the graph."""
@@ -443,43 +503,142 @@ async def upload_repository_zip(request: Request, filename: str):
         vector_store = get_vector_store()
         nodes_added = 1
         
-        # Process and index documents
-        with zipfile.ZipFile(io.BytesIO(body)) as z:
-            for path in documents:
-                try:
-                    with z.open(path) as f:
-                        file_bytes = f.read()
-                    
-                    content = extract_file_content(path, file_bytes)
-                    if content:
-                        # Index in Vector Store
-                        vector_store.add_texts(
-                            texts=[content],
-                            metadatas=[{"source": f"{repo_name} · {path}", "repository": repo_name, "path": path}],
-                            ids=[f"doc:{repo_name}:{path}"]
-                        )
-                        # Add node to Graph
-                        title = f"{repo_name} · {path}"
-                        graph.add_node("Document", {
-                            "title": title,
-                            "path": path,
-                            "repository": repo_name,
-                            "source": "Local ZIP upload",
-                            "content_summary": content[:500]
-                        })
-                        graph.add_relationship("Repository", repo_name, "Document", title, "CONTAINS")
-                        nodes_added += 1
-                except Exception as ex:
-                    logger.error(f"Error processing doc {path}: {ex}")
-                    
-            # Extract tables (Excels & CSVs) to dynamically construct Graph Nodes and Relationships!
-            try:
-                tables = extract_tables_from_zip(body)
-                for table_name, headers, data_rows in tables:
-                    parse_table_and_add_to_graph(table_name, headers, data_rows, graph)
-            except Exception as ex:
-                logger.error(f"Error extracting structural graph from tables: {ex}")
+        # Single-pass: open zip once, read all files, process content + tables together
+        try:
+            with zipfile.ZipFile(io.BytesIO(body)) as z:
+                all_names = [info.filename for info in z.infolist() if not info.is_dir() and "__MACOSX" not in info.filename]
                 
+                # Track tables extracted from Excel/CSV for graph insertion
+                parsed_tables: List[tuple] = []
+                
+                for path in all_names:
+                    lower_path = path.lower()
+                    is_text_doc = lower_path.endswith((".md", ".mdx", ".rst", ".txt"))
+                    is_excel = lower_path.endswith((".xlsx", ".xls"))
+                    is_csv = lower_path.endswith(".csv")
+                    
+                    if not (is_text_doc or is_excel or is_csv):
+                        continue
+
+                    try:
+                        with z.open(path) as f:
+                            file_bytes = f.read()
+                    except Exception as ex:
+                        logger.error(f"Could not read {path} from ZIP: {ex}")
+                        continue
+
+                    # ── TEXT / MARKDOWN docs ─────────────────────────────────
+                    if is_text_doc:
+                        content = file_bytes.decode("utf-8", errors="ignore")
+                        if content.strip():
+                            vector_store.add_texts(
+                                texts=[content],
+                                metadatas=[{"source": f"{repo_name} · {path}", "repository": repo_name, "path": path}],
+                                ids=[f"doc:{repo_name}:{path}"]
+                            )
+                            title = f"{repo_name} · {path}"
+                            graph.add_node("Document", {
+                                "title": title, "path": path,
+                                "repository": repo_name, "source": "Local ZIP upload",
+                                "content_summary": content[:500]
+                            })
+                            graph.add_relationship("Repository", repo_name, "Document", title, "CONTAINS")
+                            nodes_added += 1
+
+                    # ── EXCEL sheets ─────────────────────────────────────────
+                    elif is_excel:
+                        try:
+                            import openpyxl
+                            wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+                            for sheet_name in wb.sheetnames:
+                                sheet = wb[sheet_name]
+                                all_rows = []
+                                for row in sheet.iter_rows(values_only=True):
+                                    if any(cell is not None for cell in row):
+                                        all_rows.append(list(row))
+                                
+                                if len(all_rows) < 1:
+                                    continue
+
+                                # Convert entire sheet to text for vector indexing
+                                text_lines = [f"File: {path}, Sheet: {sheet_name}"]
+                                for row in all_rows:
+                                    line = ", ".join([str(v) if v is not None else "" for v in row])
+                                    if line.strip(", "):
+                                        text_lines.append(line)
+                                sheet_text = "\n".join(text_lines)
+
+                                sheet_id = f"{path}:{sheet_name}"
+                                vector_store.add_texts(
+                                    texts=[sheet_text],
+                                    metadatas=[{"source": sheet_id, "repository": repo_name, "path": path, "sheet": sheet_name}],
+                                    ids=[f"doc:{repo_name}:{sheet_id}"]
+                                )
+                                logger.info(f"Indexed sheet '{sheet_name}' from '{path}' into vector store ({len(all_rows)} rows)")
+
+                                # Add Document node for the sheet
+                                title = f"{repo_name} · {sheet_id}"
+                                graph.add_node("Document", {
+                                    "title": title, "path": path, "sheet": sheet_name,
+                                    "repository": repo_name, "source": "Local ZIP upload",
+                                    "content_summary": sheet_text[:500]
+                                })
+                                graph.add_relationship("Repository", repo_name, "Document", title, "CONTAINS")
+                                nodes_added += 1
+
+                                # Collect for table-to-graph parsing
+                                if len(all_rows) > 1:
+                                    headers = [str(h).lower().strip() if h is not None else f"col{i}" for i, h in enumerate(all_rows[0])]
+                                    parsed_tables.append((sheet_id, headers, all_rows[1:]))
+                        except Exception as ex:
+                            logger.error(f"Error parsing Excel '{path}': {ex}")
+
+                    # ── CSV ──────────────────────────────────────────────────
+                    elif is_csv:
+                        try:
+                            import csv
+                            content_str = file_bytes.decode("utf-8", errors="ignore")
+                            rows = list(csv.reader(io.StringIO(content_str)))
+                            if rows:
+                                sheet_text = f"File: {path}\n" + "\n".join([", ".join(r) for r in rows if any(c.strip() for c in r)])
+                                vector_store.add_texts(
+                                    texts=[sheet_text],
+                                    metadatas=[{"source": path, "repository": repo_name, "path": path}],
+                                    ids=[f"doc:{repo_name}:{path}"]
+                                )
+                                logger.info(f"Indexed CSV '{path}' into vector store ({len(rows)} rows)")
+                                title = f"{repo_name} · {path}"
+                                graph.add_node("Document", {
+                                    "title": title, "path": path,
+                                    "repository": repo_name, "source": "Local ZIP upload",
+                                    "content_summary": sheet_text[:500]
+                                })
+                                graph.add_relationship("Repository", repo_name, "Document", title, "CONTAINS")
+                                nodes_added += 1
+                                if len(rows) > 1:
+                                    headers = [str(h).lower().strip() if h else f"col{i}" for i, h in enumerate(rows[0])]
+                                    parsed_tables.append((path, headers, rows[1:]))
+                        except Exception as ex:
+                            logger.error(f"Error parsing CSV '{path}': {ex}")
+
+                # ── Graph structural + generic table parsers ──────────────
+                for table_name, headers, data_rows in parsed_tables:
+                    try:
+                        parse_table_and_add_to_graph(table_name, headers, data_rows, graph)
+                    except Exception as ex:
+                        logger.error(f"Ontological parse failed for '{table_name}': {ex}")
+                    try:
+                        tbl_nodes = parse_generic_table_to_graph(repo_name, table_name, headers, data_rows, graph)
+                        nodes_added += tbl_nodes
+                    except Exception as ex:
+                        logger.error(f"Generic table parse failed for '{table_name}': {ex}")
+
+        except zipfile.BadZipFile:
+            raise HTTPException(status_code=400, detail="Invalid ZIP file structure.")
+        except Exception as ex:
+            logger.exception("Error during ZIP content processing")
+            raise HTTPException(status_code=500, detail=str(ex))
+
         profile["graph_nodes_added"] = nodes_added
         
         # Add to activity log
