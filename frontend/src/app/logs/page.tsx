@@ -15,7 +15,7 @@ export default function AgentLogs() {
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:8000/api/v1/agent-activity-log");
+      const res = await fetch("/api/v1/agent-activity-log");
       if (res.ok) {
         const data = await res.json();
         if (data.length > 0) {

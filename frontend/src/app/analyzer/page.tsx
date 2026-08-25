@@ -12,12 +12,9 @@ import {
   Loader2,
   BrainCircuit,
   Settings,
-  CornerDownRight,
-  Eye,
-  GitMerge,
-  FileCode,
-  Gauge
+  CornerDownRight
 } from "lucide-react";
+import { ExplainabilityPanel, type Explainability } from "@/components/explainability-panel";
 
 export default function RequirementAnalyzer() {
   const [query, setQuery] = useState("Add WhatsApp notifications for order updates");
@@ -38,7 +35,7 @@ export default function RequirementAnalyzer() {
     }, 1200);
 
     try {
-      const res = await fetch("http://localhost:8000/api/v1/analyze", {
+      const res = await fetch("/api/v1/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query })
@@ -150,22 +147,6 @@ export default function RequirementAnalyzer() {
     "Drafting final implementation plan..."
   ];
 
-  // Helper to color node categories in explainability
-  const getNodeColorClass = (node: string) => {
-    const parts = node.split(":");
-    const type = parts[0];
-    switch (type) {
-      case "Service": return "bg-blue-500/10 text-blue-400 border-blue-500/30";
-      case "Team": return "bg-yellow-500/10 text-yellow-400 border-yellow-500/30";
-      case "Engineer": return "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
-      case "Repository": return "bg-purple-500/10 text-purple-400 border-purple-500/30";
-      case "API": return "bg-teal-500/10 text-teal-400 border-teal-500/30";
-      case "Incident": return "bg-rose-500/10 text-rose-400 border-rose-500/30";
-      case "Requirement": return "bg-pink-500/10 text-pink-400 border-pink-500/30";
-      default: return "bg-slate-800 text-slate-400 border-slate-700";
-    }
-  };
-
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Search Header */}
@@ -262,7 +243,7 @@ export default function RequirementAnalyzer() {
                 <div>
                   <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Affected Services</h4>
                   <div className="flex flex-wrap gap-2">
-                    {result.results.impact_analysis.services?.map((svc: string) => (
+                    {result.results.impact_analysis?.services?.map((svc: string) => (
                       <span key={svc} className="px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-medium">
                         {svc}
                       </span>
@@ -273,7 +254,7 @@ export default function RequirementAnalyzer() {
                 <div>
                   <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Target Repositories</h4>
                   <div className="flex flex-wrap gap-2">
-                    {result.results.impact_analysis.repositories?.map((repo: string) => (
+                    {result.results.impact_analysis?.repositories?.map((repo: string) => (
                       <span key={repo} className="px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-medium font-mono">
                         {repo}
                       </span>
@@ -284,7 +265,7 @@ export default function RequirementAnalyzer() {
                 <div>
                   <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Involved APIs</h4>
                   <div className="flex flex-wrap gap-2">
-                    {result.results.impact_analysis.apis?.map((api: string) => (
+                    {result.results.impact_analysis?.apis?.map((api: string) => (
                       <span key={api} className="px-3 py-1.5 rounded-lg bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-medium font-mono">
                         {api}
                       </span>
@@ -306,7 +287,7 @@ export default function RequirementAnalyzer() {
                 <ShieldAlert className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
                 <div>
                   <h4 className="text-xs font-semibold text-slate-200">Risk Assessment</h4>
-                  <p className="text-xs text-slate-400 mt-1">{result.results.impact_analysis.risk}</p>
+                  <p className="text-xs text-slate-400 mt-1">{result.results.impact_analysis?.risk || result.results.risks || "No elevated risk was identified by this agent."}</p>
                 </div>
               </div>
             </div>
@@ -349,7 +330,7 @@ export default function RequirementAnalyzer() {
                     <div>
                       <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">SMEs & Owners</span>
                       <ul className="text-xs text-slate-300 space-y-1 mt-1">
-                        {result.results.key_contacts.owners?.map((owner: string) => (
+                        {result.results.key_contacts?.owners?.map((owner: string) => (
                           <li key={owner} className="flex items-center gap-1.5">
                             <Users className="h-3 w-3 text-slate-500" />
                             {owner}
@@ -360,7 +341,7 @@ export default function RequirementAnalyzer() {
                     <div>
                       <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Architects</span>
                       <ul className="text-xs text-slate-300 space-y-1 mt-1">
-                        {result.results.key_contacts.architects?.map((arch: string) => (
+                        {result.results.key_contacts?.architects?.map((arch: string) => (
                           <li key={arch} className="flex items-center gap-1.5">
                             <Settings className="h-3 w-3 text-slate-500" />
                             {arch}
@@ -374,122 +355,8 @@ export default function RequirementAnalyzer() {
             </div>
           </div>
 
-          {/* Explainability Panel (Right Side Panel) */}
-          <div className="xl:col-span-1 p-6 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col gap-6 h-[750px] overflow-y-auto">
-            <h3 className="font-bold text-sm text-white flex items-center gap-2 border-b border-slate-800 pb-3 shrink-0">
-              <Eye className="h-4.5 w-4.5 text-indigo-400 animate-pulse" />
-              AI Explainability Panel
-            </h3>
-
-            {result.explainability ? (
-              <div className="space-y-6">
-                
-                {/* Confidence Meter */}
-                <div className="flex flex-col items-center justify-center p-4 bg-slate-950 border border-slate-850 rounded-xl relative">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1">
-                    <Gauge className="h-3.5 w-3.5 text-indigo-400" />
-                    Confidence Score
-                  </span>
-                  <div className="relative flex items-center justify-center">
-                    <svg className="w-20 h-20">
-                      <circle className="text-slate-800" strokeWidth="5" stroke="currentColor" fill="transparent" r="34" cx="40" cy="40" />
-                      <circle 
-                        className="text-indigo-500 transition-all duration-1000" 
-                        strokeWidth="5" 
-                        strokeDasharray={213}
-                        strokeDashoffset={213 - (213 * result.explainability.confidence_score) / 100}
-                        strokeLinecap="round" 
-                        stroke="currentColor" 
-                        fill="transparent" 
-                        r="34" 
-                        cx="40" 
-                        cy="40" 
-                      />
-                    </svg>
-                    <span className="absolute text-lg font-extrabold text-white">{result.explainability.confidence_score}%</span>
-                  </div>
-                </div>
-
-                {/* Why Chosen Callout */}
-                <div className="p-4 bg-slate-950/80 border border-slate-850 rounded-xl space-y-2">
-                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Why Chosen</span>
-                  <p className="text-xs text-slate-300 leading-relaxed italic">
-                    "{result.explainability.why_chosen}"
-                  </p>
-                </div>
-
-                {/* Graph Nodes Traversed */}
-                <div className="space-y-2">
-                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest flex items-center gap-1">
-                    <GitMerge className="h-3.5 w-3.5 text-indigo-400" />
-                    Ontology Nodes Traversed ({result.explainability.nodes_traversed?.length})
-                  </span>
-                  <div className="flex flex-wrap gap-1.5 max-h-[140px] overflow-y-auto p-2 bg-slate-950 border border-slate-850 rounded-xl">
-                    {result.explainability.nodes_traversed?.map((node: string) => (
-                      <span 
-                        key={node} 
-                        className={`px-2 py-1 rounded text-[9px] font-mono border font-semibold ${getNodeColorClass(node)}`}
-                      >
-                        {node}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Documents Consulted */}
-                <div className="space-y-2">
-                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest flex items-center gap-1">
-                    <FileCode className="h-3.5 w-3.5 text-indigo-400" />
-                    Knowledge Sources Consulted
-                  </span>
-                  <ul className="text-xs text-slate-400 space-y-1.5 bg-slate-950 p-3 rounded-xl border border-slate-850">
-                    {result.explainability.documents_consulted?.map((doc: string, idx: number) => (
-                      <li key={idx} className="flex items-start gap-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-slate-600 mt-1.5 shrink-0"></span>
-                        <span className="truncate">{doc}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Similar Requirements Used */}
-                {result.explainability.similar_requirements?.length > 0 && (
-                  <div className="space-y-2">
-                    <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
-                      Similar Requirements Mapped
-                    </span>
-                    <ul className="text-xs text-slate-400 space-y-1 bg-slate-950 p-3 rounded-xl border border-slate-850">
-                      {result.explainability.similar_requirements?.map((req: string, idx: number) => (
-                        <li key={idx} className="truncate">
-                          🔍 {req}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Contributing Agents Flow */}
-                <div className="space-y-2">
-                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
-                    Contributing Agent Graph
-                  </span>
-                  <div className="flex flex-col gap-1.5 bg-slate-950 p-3 rounded-xl border border-slate-850 font-mono text-[9px]">
-                    {result.explainability.contributing_agents?.map((agent: string, idx: number) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-indigo-500 shrink-0"></span>
-                        <span className="text-slate-300 font-semibold">{agent}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center text-center text-slate-500 h-full gap-2">
-                <HelpCircle className="h-6 w-6 text-slate-700" />
-                <span className="text-xs">No analysis trace loaded.</span>
-              </div>
-            )}
+          <div className="xl:col-span-1 h-[750px] overflow-y-auto">
+            <ExplainabilityPanel explainability={result.explainability as Explainability} />
           </div>
 
         </div>

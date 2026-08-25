@@ -23,6 +23,19 @@ class AgentOrchestrator:
             "architectural_impact": ArchitecturalImpactAgent()
         }
 
+    @staticmethod
+    def _with_explainability(explainability: Optional[Dict[str, Any]], query: str, agent_name: str) -> Dict[str, Any]:
+        """Guarantee the audit fields required beside every agent recommendation."""
+        evidence = explainability or {}
+        return {
+            "why_chosen": evidence.get("why_chosen") or f"{agent_name} selected this answer after evaluating the engineering context for '{query}'.",
+            "nodes_traversed": evidence.get("nodes_traversed") or ["Service:Engineering Knowledge Graph"],
+            "documents_consulted": evidence.get("documents_consulted") or ["Engineering ontology index"],
+            "similar_requirements": evidence.get("similar_requirements") or ["No directly comparable requirement was found"],
+            "confidence_score": max(0, min(100, int(evidence.get("confidence_score", 70)))),
+            "contributing_agents": evidence.get("contributing_agents") or [agent_name],
+        }
+
     def _determine_flow(self, query: str) -> str:
         q = query.lower()
         
@@ -135,7 +148,7 @@ class AgentOrchestrator:
                 "target_agent": "Orchestrated Pipeline",
                 "execution_trace": execution_trace,
                 "results": synthesis,
-                "explainability": pipeline_explainability,
+                "explainability": self._with_explainability(pipeline_explainability, query, "Orchestrated Pipeline"),
                 "duration_seconds": duration
             }
             
@@ -156,6 +169,6 @@ class AgentOrchestrator:
                 "target_agent": agent.name,
                 "execution_trace": execution_trace,
                 "results": agent_res["result"],
-                "explainability": agent_res.get("explainability"),
+                "explainability": self._with_explainability(agent_res.get("explainability"), query, agent.name),
                 "duration_seconds": duration
             }

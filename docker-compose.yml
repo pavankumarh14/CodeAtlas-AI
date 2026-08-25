@@ -13,11 +13,11 @@ services:
       - neo4j_data:/data
       - neo4j_logs:/logs
 
-  backend:
+  app:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
-    container_name: codeatlas-backend
+    container_name: codeatlas-app
     ports:
       - "8000:8000"
     environment:
@@ -30,17 +30,6 @@ services:
       - FORCE_FALLBACK=false
     depends_on:
       - neo4j
-    restart: always
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: codeatlas-frontend
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
     restart: always
 
 volumes:

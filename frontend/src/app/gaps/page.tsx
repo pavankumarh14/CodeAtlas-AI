@@ -31,7 +31,7 @@ export default function KnowledgeGaps() {
     async function fetchGaps() {
       setLoading(true);
       try {
-        const res = await fetch("http://localhost:8000/api/v1/knowledge-gaps");
+        const res = await fetch("/api/v1/knowledge-gaps");
         if (res.ok) {
           const data = await res.json();
           setGaps(data);

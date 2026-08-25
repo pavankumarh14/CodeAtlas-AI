@@ -67,19 +67,19 @@ export default function HomeDashboard() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const statsRes = await fetch("http://localhost:8000/api/v1/stats");
+        const statsRes = await fetch("/api/v1/stats");
         if (statsRes.ok) {
           const statsData = await statsRes.json();
           setStats(statsData);
         }
         
-        const incRes = await fetch("http://localhost:8000/api/v1/incidents");
+        const incRes = await fetch("/api/v1/incidents");
         if (incRes.ok) {
           const incData = await incRes.json();
           setIncidents(incData.filter((i: any) => i.status === "Active" || i.status === "Triggered").slice(0, 5));
         }
 
-        const reqRes = await fetch("http://localhost:8000/api/v1/requirements");
+        const reqRes = await fetch("/api/v1/requirements");
         if (reqRes.ok) {
           const reqData = await reqRes.json();
           setRequirements(reqData.slice(0, 5));
@@ -109,7 +109,7 @@ export default function HomeDashboard() {
         <div>
           <h2 className="text-2xl font-bold text-white mb-2">Welcome to CodeAtlas AI</h2>
           <p className="text-slate-400 text-sm max-w-xl">
-            Analyze architectural impact, investigate active incidents, discover system experts, and track coverage across your living engineering ontology.
+            Your engineering brain: AI recommendations grounded in the knowledge graph, code, requirements, docs, owners, and architecture context.
           </p>
         </div>
         <div className="flex items-center gap-4 shrink-0">

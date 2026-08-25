@@ -70,6 +70,17 @@
 
 ## 🏃 Local Setup & Run
 
+### Deploy to Render (one service)
+
+This repository includes a root `Dockerfile` and `render.yaml` that build the Next.js UI as static files and serve it from the same FastAPI container as the API. There is no separate frontend deployment or cross-origin configuration to manage.
+
+1. Push this repository to GitHub.
+2. In Render, choose **New + → Blueprint** and select the repository. Render detects `render.yaml`.
+3. Add `OPENAI_API_KEY` in the Render environment settings if you want live model responses; it is optional because the app has a seeded in-memory fallback.
+4. Deploy and open the single Render URL. The UI uses relative `/api/v1/...` calls, so it automatically talks to that same service.
+
+The free deployment runs with `FORCE_FALLBACK=true`, so it needs no Neo4j or Chroma instance. Runtime data is in memory and resets after a service restart.
+
 ### Option A: Direct Local Setup (Fastest & Zero-Dependency)
 
 Since Docker is sometimes not available on GUI macOS tools, you can run the services directly in terminal processes. The backend automatically switches into **In-Memory Fallback Mode** (`FORCE_FALLBACK=true` in `.env`), allowing instant trials.
@@ -122,9 +133,8 @@ docker-compose up --build
 ```
 
 This spins up:
-1. **Neo4j** Console on [http://localhost:7474](http://localhost:7474) (Credentials: `neo4j/password`).
-2. **FastAPI Backend** on [http://localhost:8000](http://localhost:8000).
-3. **Next.js Client** on [http://localhost:3000](http://localhost:3000).
+1. **CodeAtlas AI** (the UI and API together) on [http://localhost:8000](http://localhost:8000).
+2. **Neo4j** Console on [http://localhost:7474](http://localhost:7474) (Credentials: `neo4j/password`).
 
 ---
 

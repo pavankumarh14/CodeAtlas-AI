@@ -37,7 +37,7 @@ export default function IncidentRoom() {
   useEffect(() => {
     async function fetchIncidents() {
       try {
-        const res = await fetch("http://localhost:8000/api/v1/incidents");
+        const res = await fetch("/api/v1/incidents");
         if (res.ok) {
           const data = await res.json();
           const active = data.filter((i: any) => i.status === "Active" || i.status === "Triggered");
@@ -57,7 +57,7 @@ export default function IncidentRoom() {
     setLoading(true);
     setTroubleshootResult(null);
     try {
-      const res = await fetch("http://localhost:8000/api/v1/analyze", {
+      const res = await fetch("/api/v1/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: queryText })

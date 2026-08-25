@@ -1,10 +1,12 @@
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import logging
 import uuid
 import datetime
+import os
 
 from .config import settings
 from .graph import get_graph_driver
@@ -262,3 +264,9 @@ def get_graph_data():
     except Exception as e:
         logger.error(f"Failed to fetch graph data: {e}", exc_info=True)
         return {"nodes": [], "edges": []}
+
+# In the Render image, the Next.js static export is copied here during the Docker build.
+# Mount this last so all API and documentation routes remain owned by FastAPI.
+static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+if os.path.isdir(static_dir):
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="frontend")

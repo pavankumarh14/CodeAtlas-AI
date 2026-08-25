@@ -47,7 +47,7 @@ export default function RootLayout({
             <BrainCircuit className="h-7 w-7 text-indigo-500 animate-pulse" />
             <div>
               <h1 className="font-bold text-lg tracking-tight text-white">CodeAtlas AI</h1>
-              <span className="text-[10px] text-indigo-400 font-mono uppercase tracking-widest font-semibold">Living Ontology</span>
+              <span className="text-[10px] text-indigo-400 font-mono uppercase tracking-widest font-semibold">Engineering Brain</span>
             </div>
           </div>
 
@@ -79,7 +79,7 @@ export default function RootLayout({
               onClick={async () => {
                 if (confirm("Reset and Seed database with mock data?")) {
                   try {
-                    const res = await fetch("http://localhost:8000/api/v1/seed", { method: "POST" });
+                    const res = await fetch("/api/v1/seed", { method: "POST" });
                     if (res.ok) {
                       alert("Database seeded successfully!");
                       window.location.reload();

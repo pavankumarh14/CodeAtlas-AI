@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: codeatlas-ai
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/v1/stats
+    envVars:
+      - key: FORCE_FALLBACK
+        value: "true"
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_API_KEY
+        sync: false

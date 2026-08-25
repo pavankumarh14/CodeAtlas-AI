@@ -84,7 +84,7 @@ export default function GraphExplorer() {
     async function fetchGraph() {
       setLoading(true);
       try {
-        const res = await fetch("http://localhost:8000/api/v1/graph/data");
+        const res = await fetch("/api/v1/graph/data");
         if (res.ok) {
           const data = await res.json();
           if (data.nodes && data.nodes.length > 0) {
