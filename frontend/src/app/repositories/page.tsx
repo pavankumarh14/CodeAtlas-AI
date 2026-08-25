@@ -25,10 +25,31 @@ export default function RepositoryIntakePage() {
   const [error, setError] = useState("");
   const [profile, setProfile] = useState<RepositoryProfile | null>(null);
 
-  const stageRepository = (event: React.FormEvent) => {
+  const uploadRepositoryZip = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!sourceUrl.trim() && !sourceName.trim()) return;
-    setStaged(true);
+    const fileInput = document.getElementById("zip-file-input") as HTMLInputElement;
+    const file = fileInput?.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    setError("");
+    setProfile(null);
+    setStaged(false);
+
+    try {
+      const response = await fetch(`/api/v1/repositories/upload?filename=${encodeURIComponent(file.name)}`, {
+        method: "POST",
+        body: file,
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || "Could not analyze this ZIP file.");
+      setProfile(payload);
+      setStaged(true);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not analyze this ZIP file.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const analyzePublicRepository = async (event: React.FormEvent) => {
@@ -73,16 +94,21 @@ export default function RepositoryIntakePage() {
           <button type="submit" disabled={loading} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50"><Sparkles className="h-4 w-4" /> {loading ? "Inspecting repository…" : "Analyze public repository"}</button>
         </form>
 
-        <form onSubmit={stageRepository} className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <form onSubmit={uploadRepositoryZip} className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
           <div className="flex items-center gap-2"><Archive className="h-5 w-5 text-amber-400" /><h3 className="font-bold text-white">ZIP source upload</h3></div>
           <p className="mt-2 text-xs leading-relaxed text-slate-400">Use this for a local repository or source bundle. The upload control is ready for the repository-ingestion service.</p>
           <label className="mt-5 flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-950/70 p-4 text-center transition hover:border-indigo-400">
             <CloudUpload className="h-6 w-6 text-slate-500" />
-            <span className="mt-2 text-sm font-semibold text-slate-300">Choose a ZIP file</span>
+            <span className="mt-2 text-sm font-semibold text-slate-300">
+              {sourceName ? `Selected: ${sourceName}` : "Choose a ZIP file"}
+            </span>
             <span className="mt-1 text-[11px] text-slate-500">Source stays private to your deployment.</span>
-            <input type="file" accept=".zip,application/zip" className="sr-only" onChange={(event) => { setSourceName(event.target.files?.[0]?.name || ""); setStaged(false); }} />
+            <input id="zip-file-input" type="file" accept=".zip,application/zip" className="sr-only" onChange={(event) => { setSourceName(event.target.files?.[0]?.name || ""); setStaged(false); }} />
           </label>
-          <button type="submit" disabled={!sourceName} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"><CloudUpload className="h-4 w-4" /> Stage upload</button>
+          <button type="submit" disabled={!sourceName || loading} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-indigo-400 disabled:cursor-not-allowed disabled:opacity-50">
+            <CloudUpload className="h-4 w-4" />
+            {loading ? "Uploading repository…" : "Stage upload"}
+          </button>
         </form>
       </div>
 

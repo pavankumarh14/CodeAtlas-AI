@@ -165,8 +165,6 @@ def seed_all_data():
             "service_name": svc_name
         }
         api_name = f"{method} {path}"
-        graph.add_node("API", api_name, properties=api_data) # wait, we use properties=api_data, let's verify parameters
-        # Actually our add_node expects: label, properties. So graph.add_node("API", api_data) is correct if api_data has a name. Let's add name.
         api_data["name"] = api_name
         graph.add_node("API", api_data)
         # Link API -> EXPOSES -> Service

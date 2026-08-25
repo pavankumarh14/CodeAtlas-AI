@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -7,13 +7,17 @@ import logging
 import uuid
 import datetime
 import os
+import zipfile
+import io
+import re
+import requests
 
 from .config import settings
 from .graph import get_graph_driver
 from .vectorstore import get_vector_store
 from .agents import AgentOrchestrator
 from .data import seed_all_data
-from .repository_ingestion import inspect_public_repository
+from .repository_ingestion import inspect_public_repository, MANIFEST_NAMES, DOC_SUFFIXES
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -186,6 +190,96 @@ def import_public_repository(request: RepositoryImportRequest):
     except requests.RequestException:
         logger.exception("Public repository lookup failed")
         raise HTTPException(status_code=502, detail="Could not reach GitHub. Please try again.")
+
+@app.post("/api/v1/repositories/upload", tags=["Repository Intake"])
+async def upload_repository_zip(request: Request, filename: str):
+    """Stage and inspect a local repository uploaded as a ZIP archive, adding it to the graph."""
+    try:
+        body = await request.body()
+        if not body:
+            raise HTTPException(status_code=400, detail="Empty file uploaded.")
+            
+        repo_name = filename
+        if repo_name.lower().endswith(".zip"):
+            repo_name = repo_name[:-4]
+            
+        # Read zip in-memory
+        try:
+            with zipfile.ZipFile(io.BytesIO(body)) as z:
+                paths = [info.filename for info in z.infolist() if not info.is_dir()][:1000]
+        except zipfile.BadZipFile:
+            raise HTTPException(status_code=400, detail="Invalid ZIP file structure.")
+            
+        # Classify files
+        manifests = [path for path in paths if path.rsplit("/", 1)[-1].lower() in MANIFEST_NAMES][:12]
+        documents = [path for path in paths if path.lower().endswith(DOC_SUFFIXES)][:12]
+        api_candidates = [path for path in paths if re.search(r"(^|/)(api|routes?|controllers?)(/|$)|/(route|controller)\.", path, re.IGNORECASE)][:12]
+        
+        # Detect languages based on file extensions
+        lang_map = {
+            ".py": "Python",
+            ".js": "JavaScript",
+            ".ts": "TypeScript",
+            ".tsx": "TypeScript",
+            ".jsx": "JavaScript",
+            ".go": "Go",
+            ".java": "Java",
+            ".rb": "Ruby",
+            ".rs": "Rust",
+            ".cs": "C#",
+            ".cpp": "C++",
+            ".c": "C",
+        }
+        detected_langs = set()
+        for path in paths:
+            ext = "." + path.rsplit(".", 1)[-1].lower() if "." in path else ""
+            if ext in lang_map:
+                detected_langs.add(lang_map[ext])
+                
+        languages = list(detected_langs)[:8]
+        
+        profile = {
+            "repository": repo_name,
+            "url": f"local://{filename}",
+            "description": f"Local repository staged via ZIP upload of {filename}.",
+            "default_branch": "main",
+            "languages": languages,
+            "files_scanned": len(paths),
+            "tree_truncated": len(paths) >= 1000,
+            "manifests": manifests,
+            "documents": documents,
+            "api_candidates": api_candidates,
+            "graph_nodes_added": 1 + len(documents),
+        }
+        
+        # Add to graph
+        graph = get_graph_driver()
+        graph.add_node("Repository", {
+            "name": profile["repository"],
+            "url": profile["url"],
+            "description": profile["description"],
+            "default_branch": profile["default_branch"],
+            "languages": ", ".join(profile["languages"]),
+            "source": "Local ZIP upload",
+        })
+        for path in profile["documents"]:
+            title = f"{profile['repository']} · {path}"
+            graph.add_node("Document", {"title": title, "path": path, "repository": profile["repository"], "source": "Local ZIP upload"})
+            graph.add_relationship("Repository", profile["repository"], "Document", title, "CONTAINS")
+            
+        # Add to activity log
+        activity_log.insert(0, {
+            "id": str(uuid.uuid4()), "timestamp": datetime.datetime.now().isoformat(),
+            "query": f"Uploaded local repository {profile['repository']}", "flow_type": "repository_intake",
+            "target_agent": "Repository Intake", "duration_ms": 0, "status": "Success"
+        })
+        
+        return profile
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("ZIP upload failed")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/agent-activity-log", tags=["Agents"])
 def get_activity_log():
