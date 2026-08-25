@@ -101,11 +101,6 @@ export default function GlobalError({ error, retry }: GlobalErrorProps) {
 
   return (
     <html lang="en" style={htmlStyle}>
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Error — CodeAtlas AI</title>
-      </head>
       <body style={bodyStyle}>
         <div style={cardStyle}>
           <div>
