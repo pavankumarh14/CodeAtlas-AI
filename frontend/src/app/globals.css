@@ -24,3 +24,44 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ---------- Static-export safe active link styling ----------
+ *
+ * For output:"export" builds we cannot call usePathname() during
+ * prerender (RouterContext is null in the export worker). Instead
+ * we rely on the fact that next/Link automatically sets
+ * aria-current="page" when the current path matches the href.
+ *
+ * We also mirror the same classes via data-active attribute so
+ * a tiny inline <script> in layout.tsx can force the active
+ * highlight during the first paint before React hydrates Link.
+ */
+.nav-item[aria-current="page"],
+.nav-item[data-active="true"] {
+  background-image: linear-gradient(to right, #4f46e5, #7c3aed);
+  color: #ffffff;
+  box-shadow: 0 4px 14px 0 rgba(49, 46, 129, 0.3);
+}
+
+.nav-item[aria-current="page"] .nav-icon,
+.nav-item[data-active="true"] .nav-icon {
+  color: #ffffff;
+}
+
+.nav-icon {
+  color: #94a3b8;
+}
+
+/* Header title highlight in static export (no usePathname) */
+[data-header-title]::before {
+  content: attr(data-header-title);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 220ms ease-out both;
+}
