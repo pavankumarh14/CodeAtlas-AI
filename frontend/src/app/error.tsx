@@ -5,6 +5,71 @@ type ErrorProps = {
   retry: () => void;
 };
 
+const cardStyle: React.CSSProperties = {
+  width: '100%',
+  maxWidth: 512,
+  marginLeft: 'auto',
+  marginRight: 'auto',
+  padding: 32,
+  borderRadius: 16,
+  background: '#0f172a',
+  border: '1px solid #1e293b',
+  textAlign: 'center',
+  boxSizing: 'border-box',
+};
+
+const iconWrapStyle: React.CSSProperties = {
+  width: 56,
+  height: 56,
+  marginLeft: 'auto',
+  marginRight: 'auto',
+  marginBottom: 16,
+  borderRadius: '50%',
+  background: 'rgba(244, 63, 94, 0.10)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const titleStyle: React.CSSProperties = {
+  fontSize: 18,
+  fontWeight: 700,
+  color: '#ffffff',
+  marginBottom: 8,
+  marginTop: 0,
+};
+
+const descStyle: React.CSSProperties = {
+  fontSize: 14,
+  color: '#94a3b8',
+  lineHeight: 1.5,
+  margin: 0,
+};
+
+const digestStyle: React.CSSProperties = {
+  marginTop: 12,
+  fontSize: 11,
+  fontFamily:
+    'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+  color: '#64748b',
+  wordBreak: 'break-all',
+};
+
+const btnStyle: React.CSSProperties = {
+  paddingTop: 10,
+  paddingBottom: 10,
+  paddingLeft: 20,
+  paddingRight: 20,
+  borderRadius: 12,
+  background: '#4f46e5',
+  color: '#ffffff',
+  fontSize: 14,
+  fontWeight: 600,
+  border: 'none',
+  cursor: 'pointer',
+  boxShadow: '0 4px 14px 0 rgba(49, 46, 129, 0.4)',
+};
+
 export default function Error({ error, retry }: ErrorProps) {
   if (typeof window !== 'undefined') {
     try {
@@ -15,41 +80,49 @@ export default function Error({ error, retry }: ErrorProps) {
   }
 
   return (
-    <div className="w-full max-w-lg mx-auto p-8 rounded-2xl bg-slate-900 border border-slate-800 text-center">
-      <div className="mb-6">
-        <div className="w-14 h-14 mx-auto rounded-full bg-rose-500/10 flex items-center justify-center mb-4">
+    <div style={cardStyle}>
+      <div>
+        <div style={iconWrapStyle}>
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            className="h-7 w-7 text-rose-500"
+            width={28}
+            height={28}
             viewBox="0 0 24 24"
             fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
+            stroke="#f43f5e"
+            strokeWidth={2}
             strokeLinecap="round"
             strokeLinejoin="round"
+            aria-hidden
           >
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
         </div>
-        <h2 className="text-lg font-bold text-white mb-2">Something went wrong</h2>
-        <p className="text-sm text-slate-400">
+        <h2 style={titleStyle}>Something went wrong</h2>
+        <p style={descStyle}>
           Failed to load this section. You can try again.
         </p>
         {error.digest ? (
-          <p className="mt-3 text-xs font-mono text-slate-500 break-all">
-            Error ID: {error.digest}
-          </p>
+          <p style={digestStyle}>Error ID: {error.digest}</p>
         ) : null}
       </div>
-      <button
-        type="button"
-        onClick={() => retry()}
-        className="py-2.5 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-md shadow-indigo-900/40"
-      >
-        Try again
-      </button>
+      <div style={{ marginTop: 24 }}>
+        <button
+          type="button"
+          onClick={() => retry()}
+          style={btnStyle}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = '#6366f1';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = '#4f46e5';
+          }}
+        >
+          Try again
+        </button>
+      </div>
     </div>
   );
 }
