@@ -1,21 +1,25 @@
 'use client';
 
-import { useEffect } from 'react';
-
-export default function GlobalError({
-  error,
-  retry,
-}: {
+type GlobalErrorProps = {
   error: Error & { digest?: string };
   retry: () => void;
-}) {
-  useEffect(() => {
-    console.error(error);
-  }, [error]);
+};
+
+export default function GlobalError({ error, retry }: GlobalErrorProps) {
+  if (typeof window !== 'undefined') {
+    try {
+      console.error(error);
+    } catch {
+      // no-op
+    }
+  }
 
   return (
     <html lang="en" className="h-full bg-slate-950 text-slate-100 dark">
-      <body className="h-full flex items-center justify-center font-sans antialiased">
+      <head>
+        <title>Error — CodeAtlas AI</title>
+      </head>
+      <body className="h-full flex items-center justify-center font-sans antialiased m-0">
         <div className="w-full max-w-md p-8 rounded-2xl bg-slate-900 border border-slate-800 text-center">
           <div className="mb-6">
             <div className="w-16 h-16 mx-auto rounded-full bg-rose-500/10 flex items-center justify-center mb-4">
@@ -38,13 +42,14 @@ export default function GlobalError({
             <p className="text-sm text-slate-400">
               An unexpected error occurred while loading the application.
             </p>
-            {error.digest && (
+            {error.digest ? (
               <p className="mt-3 text-xs font-mono text-slate-500 break-all">
                 Error ID: {error.digest}
               </p>
-            )}
+            ) : null}
           </div>
           <button
+            type="button"
             onClick={() => retry()}
             className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-md shadow-indigo-900/40"
           >

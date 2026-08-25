@@ -1,17 +1,18 @@
 'use client';
 
-import { useEffect } from 'react';
-
-export default function Error({
-  error,
-  retry,
-}: {
+type ErrorProps = {
   error: Error & { digest?: string };
   retry: () => void;
-}) {
-  useEffect(() => {
-    console.error(error);
-  }, [error]);
+};
+
+export default function Error({ error, retry }: ErrorProps) {
+  if (typeof window !== 'undefined') {
+    try {
+      console.error(error);
+    } catch {
+      // no-op
+    }
+  }
 
   return (
     <div className="w-full max-w-lg mx-auto p-8 rounded-2xl bg-slate-900 border border-slate-800 text-center">
@@ -36,13 +37,14 @@ export default function Error({
         <p className="text-sm text-slate-400">
           Failed to load this section. You can try again.
         </p>
-        {error.digest && (
+        {error.digest ? (
           <p className="mt-3 text-xs font-mono text-slate-500 break-all">
             Error ID: {error.digest}
           </p>
-        )}
+        ) : null}
       </div>
       <button
+        type="button"
         onClick={() => retry()}
         className="py-2.5 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-md shadow-indigo-900/40"
       >
