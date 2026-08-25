@@ -1,0 +1,759 @@
+You are a Principal AI Architect, Knowledge Graph Engineer, Full Stack Engineer, Product Designer, and Hackathon Co-Founder.
+
+Your task is to build a complete, working Proof of Concept called:
+
+# CodeAtlas AI
+
+Tagline:
+"The Living Engineering Ontology and Knowledge Graph Platform"
+
+A platform that transforms engineering knowledge trapped in repositories, tickets, incidents, documentation and tribal knowledge into an intelligent organizational brain.
+
+The solution must be designed specifically for a Platform Agent Skills & Knowledge hackathon.
+
+====================================================
+PROBLEM
+====================================================
+
+Modern engineering organizations suffer from fragmented knowledge.
+
+Information is scattered across:
+
+- GitHub repositories
+- Pull Requests
+- Jira tickets
+- Confluence pages
+- Slack conversations
+- Architecture documents
+- Freshservice incidents
+- Freshdesk tickets
+- Team ownership records
+- Runbooks
+
+When a new requirement arrives, engineers spend hours answering:
+
+- Which repositories are impacted?
+- Which services are affected?
+- What APIs are involved?
+- Who owns these systems?
+- Have we solved this problem before?
+- What incidents are related?
+- What documentation should I read?
+- What breaks if I change this component?
+
+The challenge is not finding information.
+
+The challenge is understanding relationships between information.
+
+====================================================
+VISION
+====================================================
+
+Build a Living Engineering Ontology.
+
+Unlike traditional RAG systems:
+
+- Store relationships
+- Store business meaning
+- Store ownership
+- Store dependencies
+- Store historical decisions
+- Store organizational knowledge
+
+The platform should reason about systems, not just retrieve documents.
+
+====================================================
+PRIMARY USER STORIES
+====================================================
+
+Story 1
+
+As an engineer
+
+I want to understand the impact of a new requirement
+
+So I can implement changes faster.
+
+----------------------------------------------------
+
+Story 2
+
+As a new team member
+
+I want to understand the architecture and business domain
+
+So I can onboard quickly.
+
+----------------------------------------------------
+
+Story 3
+
+As a tech lead
+
+I want to discover experts and ownership
+
+So I know who to involve.
+
+----------------------------------------------------
+
+Story 4
+
+As an architect
+
+I want to understand system dependencies
+
+So I can evaluate risk.
+
+----------------------------------------------------
+
+Story 5
+
+As an operations engineer
+
+I want incident context and historical knowledge
+
+So I can resolve issues quickly.
+
+====================================================
+CORE DIFFERENTIATOR
+====================================================
+
+Don't build a chatbot.
+
+Build an Engineering Intelligence Platform.
+
+The platform should answer:
+
+"What should I change?"
+
+"What should I understand?"
+
+"What is the business impact?"
+
+"Who should be involved?"
+
+"What happened before?"
+
+====================================================
+SYSTEM ARCHITECTURE
+====================================================
+
+Frontend
+
+- Next.js
+- TypeScript
+- TailwindCSS
+- React Flow
+
+Backend
+
+- FastAPI
+- Python
+
+Knowledge Layer
+
+- Neo4j
+
+Semantic Layer
+
+- ChromaDB
+
+LLM Layer
+
+- OpenAI compatible provider
+
+Containerization
+
+- Docker
+- Docker Compose
+
+====================================================
+LIVING ENGINEERING ONTOLOGY
+====================================================
+
+Create ontology objects.
+
+BusinessCapability
+
+Service
+
+Repository
+
+API
+
+Engineer
+
+Team
+
+Requirement
+
+Incident
+
+Document
+
+Runbook
+
+Technology
+
+Database
+
+Dependency
+
+Feature
+
+====================================================
+ONTOLOGY EXAMPLE
+====================================================
+
+Checkout Service
+
+Purpose:
+Process customer checkout requests
+
+Business Capability:
+Commerce
+
+Owners:
+Commerce Team
+
+Repositories:
+checkout-api
+
+Dependencies:
+Payment Service
+Inventory Service
+
+Consumers:
+Marketplace App
+Mobile App
+
+Failure Impact:
+Revenue Loss
+
+Risk Level:
+High
+
+Related Incidents:
+INC-101
+INC-212
+
+Related Requirements:
+REQ-65
+REQ-120
+
+Knowledge Sources:
+Confluence
+GitHub
+Freshservice
+
+====================================================
+GRAPH RELATIONSHIPS
+====================================================
+
+OWNS
+
+DEPENDS_ON
+
+IMPLEMENTS
+
+USES
+
+EXPOSES
+
+AFFECTS
+
+CREATED_BY
+
+WORKED_ON
+
+DOCUMENTED_BY
+
+GENERATES
+
+TRIGGERED
+
+ESCALATED_TO
+
+RELATED_TO
+
+SUPPORTS
+
+PART_OF
+
+====================================================
+KNOWLEDGE GRAPH
+====================================================
+
+Use Neo4j.
+
+Provide:
+
+- schema
+- indexes
+- constraints
+- seed scripts
+
+Generate realistic engineering data.
+
+====================================================
+SAMPLE DATA
+====================================================
+
+Generate:
+
+5 teams
+
+25 engineers
+
+20 services
+
+20 repositories
+
+50 requirements
+
+30 incidents
+
+50 APIs
+
+100+ graph relationships
+
+Generate startup seed scripts.
+
+====================================================
+AGENTS
+====================================================
+
+Implement specialized reusable agents.
+
+====================================================
+AGENT 1
+ONTOLOGY MENTOR AGENT
+====================================================
+
+Purpose:
+
+Teach engineers how the company works.
+
+Example Query:
+
+Explain Checkout Service to me.
+
+Output:
+
+- purpose
+- business capability
+- owners
+- dependencies
+- risks
+- important repositories
+- learning path
+
+====================================================
+AGENT 2
+REQUIREMENT IMPACT AGENT
+====================================================
+
+Input:
+
+Add WhatsApp notifications for order updates.
+
+Output:
+
+- affected services
+- affected repositories
+- APIs involved
+- teams impacted
+- dependencies
+- risk analysis
+- implementation recommendations
+
+====================================================
+AGENT 3
+EXPERT DISCOVERY AGENT
+====================================================
+
+Input:
+
+Who should review changes to Checkout Service?
+
+Output:
+
+- owners
+- contributors
+- architects
+- subject matter experts
+
+====================================================
+AGENT 4
+INCIDENT CONTEXT AGENT
+====================================================
+
+Input:
+
+Checkout latency increased.
+
+Output:
+
+- related incidents
+- dependencies
+- known fixes
+- escalation path
+
+====================================================
+AGENT 5
+ARCHITECTURE STORYTELLING AGENT
+====================================================
+
+Input:
+
+How does an order move through the platform?
+
+Output:
+
+Narrative explanation
+
+Graph walkthrough
+
+Service interactions
+
+Business flow
+
+====================================================
+AGENT 6
+KNOWLEDGE GAP AGENT
+====================================================
+
+Purpose:
+
+Find missing organizational knowledge.
+
+Detect:
+
+- undocumented services
+- missing ownership
+- missing runbooks
+- stale documentation
+
+Output:
+
+Risk score and recommendations.
+
+====================================================
+AGENT 7
+ARCHITECTURAL IMPACT AGENT
+====================================================
+
+Example:
+
+What happens if Payment Service goes down?
+
+Output:
+
+Business capabilities affected
+
+Downstream dependencies
+
+Teams impacted
+
+Historical incidents
+
+Risk rating
+
+====================================================
+AGENT ORCHESTRATION
+====================================================
+
+Implement an orchestrator.
+
+Agents should cooperate.
+
+New Requirement
+     ↓
+Impact Agent
+     ↓
+Ontology Agent
+     ↓
+Expert Discovery Agent
+     ↓
+Implementation Recommendation Agent
+
+Maintain context between agents.
+
+Store reasoning history.
+
+Provide execution traces.
+
+====================================================
+MCP CONNECTORS
+====================================================
+
+Create pluggable MCP-style adapters.
+
+GitHub MCP Adapter
+
+Jira MCP Adapter
+
+Confluence MCP Adapter
+
+Slack MCP Adapter
+
+Freshservice MCP Adapter
+
+Freshdesk MCP Adapter
+
+Each connector exposes:
+
+search()
+
+fetch()
+
+metadata()
+
+normalize()
+
+Provide mocked implementations.
+
+Use adapter pattern.
+
+====================================================
+HYBRID INTELLIGENCE
+====================================================
+
+Implement:
+
+Graph Search
++
+Vector Search
++
+LLM Reasoning
+
+Workflow:
+
+Question
+     ↓
+Graph Traversal
+     ↓
+Semantic Search
+     ↓
+Context Aggregation
+     ↓
+Agent Reasoning
+     ↓
+Response
+
+====================================================
+IMPLEMENTATION RECOMMENDATION ENGINE
+====================================================
+
+Given a requirement:
+
+Find:
+
+- impacted services
+- impacted repositories
+- similar requirements
+- historical incidents
+- experts
+- owners
+
+Generate:
+
+Implementation Plan
+
+Risk Assessment
+
+Review Plan
+
+Test Plan
+
+====================================================
+GRAPH VISUALIZATION
+====================================================
+
+Create interactive graph.
+
+Features:
+
+zoom
+
+pan
+
+search
+
+node details
+
+expand neighbors
+
+relationship explorer
+
+dependency paths
+
+impact paths
+
+====================================================
+DASHBOARD PAGES
+====================================================
+
+Home Dashboard
+
+Requirement Impact Analysis
+
+Knowledge Graph Explorer
+
+Engineering Ontology Explorer
+
+Expert Finder
+
+Incident Explorer
+
+Knowledge Gap Center
+
+Agent Activity Log
+
+====================================================
+DEMO SCENARIO
+====================================================
+
+User enters:
+
+"Add WhatsApp notifications for order updates"
+
+System should perform:
+
+1. Ontology mapping
+
+2. Graph traversal
+
+3. Dependency analysis
+
+4. Similar requirement discovery
+
+5. Repository discovery
+
+6. Expert discovery
+
+7. Risk analysis
+
+8. Agent handoff workflow
+
+9. Generate implementation plan
+
+10. Display graph visualization
+
+====================================================
+BONUS FEATURE
+====================================================
+
+Living Engineering DNA
+
+The system automatically generates:
+
+"What is this service?"
+
+"Why does it exist?"
+
+"Who needs it?"
+
+"What happens if it fails?"
+
+This explanation should be generated using ontology relationships.
+
+====================================================
+PROJECT STRUCTURE
+====================================================
+
+Generate the following:
+
+/frontend
+
+/backend
+
+/agents
+
+/ontology
+
+/graph
+
+/connectors
+
+/vectorstore
+
+/data
+
+/docker
+
+/docs
+
+====================================================
+OUTPUT REQUIREMENTS
+====================================================
+
+Generate:
+
+1. Complete folder structure
+
+2. Backend source code
+
+3. Frontend source code
+
+4. Neo4j setup scripts
+
+5. Docker Compose
+
+6. Seed data
+
+7. Agent framework
+
+8. MCP adapter framework
+
+9. Ontology engine
+
+10. Graph query service
+
+11. API contracts
+
+12. README
+
+13. Environment configuration
+
+14. Architecture diagram
+
+15. Demo instructions
+
+16. Local setup guide
+
+17. Sample test data
+
+18. Example API requests
+
+19. Example API responses
+
+20. Runnable MVP
+
+IMPORTANT:
+
+Do not generate pseudocode.
+
+Write production-quality code.
+
+Generate files sequentially.
+
+Ensure application runs using:
+
+docker-compose up
+
+The final result should demonstrate:
+
+Engineering Knowledge Graph
++
+Living Ontology
++
+Reusable Agent Skills
++
+Agent Handoffs
++
+MCP Integrations
++
+Knowledge-to-Action
+
+and be suitable as a hackathon-winning MVP.

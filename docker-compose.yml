@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  neo4j:
+    image: neo4j:5.12.0-community
+    container_name: codeatlas-neo4j
+    ports:
+      - "7474:7474" # Neo4j HTTP console
+      - "7687:7687" # Bolt port
+    environment:
+      - NEO4J_AUTH=neo4j/password
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: codeatlas-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=password
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.openai.com/v1}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - FORCE_FALLBACK=false
+    depends_on:
+      - neo4j
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: codeatlas-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
