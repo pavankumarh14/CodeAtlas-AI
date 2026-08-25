@@ -7,6 +7,7 @@ import {
   Home, 
   Share2, 
   FileSearch, 
+  FolderGit2,
   Users, 
   AlertTriangle, 
   ShieldAlert, 
@@ -27,6 +28,7 @@ export default function RootLayout({
     { name: "Home Dashboard", href: "/", icon: Home },
     { name: "Knowledge Graph", href: "/graph", icon: Share2 },
     { name: "Requirement Analyzer", href: "/analyzer", icon: FileSearch },
+    { name: "Repository Intake", href: "/repositories", icon: FolderGit2 },
     { name: "Expert Finder", href: "/experts", icon: Users },
     { name: "Incident Room", href: "/incidents", icon: AlertTriangle },
     { name: "Knowledge Gaps", href: "/gaps", icon: ShieldAlert },
@@ -77,11 +79,11 @@ export default function RootLayout({
           <div className="p-4 border-t border-slate-800 bg-slate-950/30">
             <button
               onClick={async () => {
-                if (confirm("Reset and Seed database with mock data?")) {
+                if (confirm("Load the CodeAtlas demo dataset? This replaces the current in-memory sample data with services, repositories, requirements, incidents, teams, and engineers used in the guided demo.")) {
                   try {
                     const res = await fetch("/api/v1/seed", { method: "POST" });
                     if (res.ok) {
-                      alert("Database seeded successfully!");
+                      alert("Demo data loaded successfully!");
                       window.location.reload();
                     } else {
                       alert("Seed failed. Ensure the backend server is running.");
@@ -94,8 +96,11 @@ export default function RootLayout({
               className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 active:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-semibold tracking-wider uppercase transition-colors flex items-center justify-center gap-2"
             >
               <Database className="h-3.5 w-3.5" />
-              Reset & Seed DB
+              Load Demo Data
             </button>
+            <p className="mt-2 text-center text-[10px] leading-relaxed text-slate-500">
+              Reloads the sample engineering company used by the demo.
+            </p>
           </div>
         </aside>
 

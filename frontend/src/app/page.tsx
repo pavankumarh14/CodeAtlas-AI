@@ -12,7 +12,10 @@ import {
   ArrowRight,
   TrendingDown,
   Activity,
-  Heart
+  Heart,
+  CheckCircle2,
+  Video,
+  MonitorPlay
 } from "lucide-react";
 
 const demoUseCases = [
@@ -86,7 +89,7 @@ export default function HomeDashboard() {
     { req_id: "REQ-103", title: "Feature Requirement REQ-103: Optimize database indices for search indexing", priority: "Medium", status: "Implemented" }
   ]);
 
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
@@ -144,7 +147,43 @@ export default function HomeDashboard() {
             Analyze Requirement
             <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
           </Link>
+          <Link href="/repositories" className="px-5 py-3 rounded-xl border border-slate-700 hover:border-indigo-400 text-slate-200 hover:text-white font-semibold text-sm transition flex items-center gap-2">
+            Add Repository
+            <GitBranch className="h-4 w-4" />
+          </Link>
         </div>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+        <section className="rounded-2xl border border-emerald-500/25 bg-emerald-950/15 p-6">
+          <div className="flex items-start gap-3">
+            <MonitorPlay className="mt-0.5 h-5 w-5 text-emerald-400" />
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Stage 1 · Qualification demo</p>
+              <h3 className="mt-1 text-lg font-bold text-white">Working prototype is ready to show</h3>
+              <p className="mt-2 text-sm leading-relaxed text-slate-400">CodeAtlas demonstrates an early, clickable prototype for the Platform Agent Skills & Knowledge track: company knowledge becomes an explainable engineering action.</p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-emerald-400/20 bg-slate-950/55 p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold text-slate-100"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Prototype / working demo</p>
+              <p className="mt-1 text-xs text-slate-400">Ready: guided scenarios, live agent handoffs, graph reasoning, and explainability evidence.</p>
+            </div>
+            <div className="rounded-xl border border-amber-400/20 bg-slate-950/55 p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold text-slate-100"><Video className="h-4 w-4 text-amber-400" /> 1–2 minute walkthrough</p>
+              <p className="mt-1 text-xs text-slate-400">Next asset: record the guided requirement scenario and show the evidence panel.</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Suggested demo script</p>
+          <ol className="mt-4 space-y-3 text-xs text-slate-300">
+            <li className="flex gap-3"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-500/15 font-mono text-[10px] text-indigo-300">1</span>Enter a product request in Requirement Analyzer.</li>
+            <li className="flex gap-3"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-500/15 font-mono text-[10px] text-indigo-300">2</span>Show the live handoff from Impact to Ontology to Expert agents.</li>
+            <li className="flex gap-3"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-500/15 font-mono text-[10px] text-indigo-300">3</span>End on the implementation plan and Explainability Panel.</li>
+          </ol>
+        </section>
       </div>
 
       <div className="rounded-2xl border border-indigo-500/25 bg-indigo-950/20 p-6">

@@ -12,7 +12,10 @@ import {
   Loader2,
   BrainCircuit,
   Settings,
-  CornerDownRight
+  CornerDownRight,
+  CheckCircle2,
+  CircleDot,
+  Network
 } from "lucide-react";
 import { ExplainabilityPanel, type Explainability } from "@/components/explainability-panel";
 
@@ -29,7 +32,6 @@ export default function RequirementAnalyzer() {
     setLoading(true);
     setResult(null);
 
-    let step = 0;
     const interval = setInterval(() => {
       setActiveStep(s => s + 1);
     }, 1200);
@@ -147,6 +149,14 @@ export default function RequirementAnalyzer() {
     "Drafting final implementation plan..."
   ];
 
+  const liveHandoffStages = [
+    { agent: "Orchestrator", detail: "Classifies the engineering question and selects the specialist workflow." },
+    { agent: "Requirement Impact Agent", detail: "Searches connected requirements, repositories, APIs, and dependencies." },
+    { agent: "Ontology Mentor Agent", detail: "Traverses the knowledge graph to add architecture and service context." },
+    { agent: "Expert Discovery Agent", detail: "Finds the owning team, reviewers, and subject-matter experts." },
+    { agent: "Recommendation Synthesizer", detail: "Builds the plan and attaches its auditable evidence trail." },
+  ];
+
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Search Header */}
@@ -198,11 +208,28 @@ export default function RequirementAnalyzer() {
 
       {/* Loading Animation State */}
       {loading && (
-        <div className="flex flex-col items-center justify-center py-16 bg-slate-900/50 border border-dashed border-slate-800 rounded-2xl gap-4">
-          <BrainCircuit className="h-10 w-10 text-indigo-500 animate-spin" />
-          <div className="text-center">
-            <h4 className="text-sm font-semibold text-slate-200">Mobilizing Specialized Agents</h4>
-            <p className="text-xs text-slate-500 mt-1 font-mono">{loadingSteps[Math.min(activeStep, loadingSteps.length - 1)]}</p>
+        <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-indigo-950/35 via-slate-900 to-slate-900 p-6">
+          <div className="mb-5 flex items-center gap-3">
+            <BrainCircuit className="h-8 w-8 text-indigo-400 animate-spin" />
+            <div>
+              <h4 className="text-sm font-bold text-white">Live agent handoff in progress</h4>
+              <p className="mt-1 font-mono text-xs text-indigo-200">{loadingSteps[Math.min(activeStep, loadingSteps.length - 1)]}</p>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-5">
+            {liveHandoffStages.map((stage, index) => {
+              const state = index < activeStep ? "complete" : index === activeStep ? "active" : "waiting";
+              return (
+                <div key={stage.agent} className={`rounded-xl border p-3 ${state === "active" ? "border-indigo-400/60 bg-indigo-500/10" : state === "complete" ? "border-emerald-400/30 bg-emerald-500/5" : "border-slate-800 bg-slate-950/45"}`}>
+                  <div className="mb-2 flex items-center gap-1.5">
+                    {state === "complete" ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : state === "active" ? <Network className="h-4 w-4 animate-pulse text-indigo-300" /> : <CircleDot className="h-4 w-4 text-slate-600" />}
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${state === "waiting" ? "text-slate-500" : "text-slate-200"}`}>Step {index + 1}</span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-200">{stage.agent}</p>
+                  <p className="mt-1 text-[10px] leading-relaxed text-slate-400">{stage.detail}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

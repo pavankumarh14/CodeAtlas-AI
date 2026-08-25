@@ -13,6 +13,7 @@ from .graph import get_graph_driver
 from .vectorstore import get_vector_store
 from .agents import AgentOrchestrator
 from .data import seed_all_data
+from .repository_ingestion import inspect_public_repository
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -40,6 +41,9 @@ orchestrator = AgentOrchestrator()
 
 class AnalyzeRequest(BaseModel):
     query: str
+
+class RepositoryImportRequest(BaseModel):
+    repository_url: str
 
 @app.on_event("startup")
 def startup_event():
@@ -151,6 +155,37 @@ def analyze_query(request: AnalyzeRequest):
         }
         activity_log.insert(0, log_entry)
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/repositories/import", tags=["Repository Intake"])
+def import_public_repository(request: RepositoryImportRequest):
+    """Inspect public GitHub metadata and add the discoverable evidence to the graph."""
+    try:
+        profile = inspect_public_repository(request.repository_url)
+        graph = get_graph_driver()
+        graph.add_node("Repository", {
+            "name": profile["repository"],
+            "url": profile["url"],
+            "description": profile["description"],
+            "default_branch": profile["default_branch"],
+            "languages": ", ".join(profile["languages"]),
+            "source": "Public GitHub import",
+        })
+        for path in profile["documents"]:
+            title = f"{profile['repository']} · {path}"
+            graph.add_node("Document", {"title": title, "path": path, "repository": profile["repository"], "source": "Public GitHub import"})
+            graph.add_relationship("Repository", profile["repository"], "Document", title, "CONTAINS")
+
+        activity_log.insert(0, {
+            "id": str(uuid.uuid4()), "timestamp": datetime.datetime.now().isoformat(),
+            "query": f"Imported public repository {profile['repository']}", "flow_type": "repository_intake",
+            "target_agent": "Repository Intake", "duration_ms": 0, "status": "Success"
+        })
+        return {**profile, "graph_nodes_added": 1 + len(profile["documents"])}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except requests.RequestException:
+        logger.exception("Public repository lookup failed")
+        raise HTTPException(status_code=502, detail="Could not reach GitHub. Please try again.")
 
 @app.get("/api/v1/agent-activity-log", tags=["Agents"])
 def get_activity_log():
