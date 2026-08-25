@@ -119,33 +119,7 @@ export default function RootLayout({
           </div>
         </main>
 
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-(function () {
-  try {
-    var path = window.location.pathname.replace(/\\/+$/, '') || '/';
-    var links = document.querySelectorAll('[data-nav-link]');
-    links.forEach(function (a) {
-      var href = a.getAttribute('data-href') || a.getAttribute('href');
-      if (!href) return;
-      var clean = href.replace(/\\/+$/, '') || '/';
-      if (clean === path) a.setAttribute('data-active', 'true');
-    });
-    var titleEl = document.querySelector('[data-nav-title]');
-    if (titleEl) {
-      var activeLink = document.querySelector('[data-nav-link][data-active="true"]');
-      if (activeLink) {
-        var label = activeLink.textContent || 'Dashboard';
-        titleEl.setAttribute('data-header-title', (label || '').trim());
-      }
-    }
-  } catch (e) { /* no-op if DOM not ready */ }
-})();
-`,
-          }}
-          defer
-        />
+
       </body>
     </html>
   );
