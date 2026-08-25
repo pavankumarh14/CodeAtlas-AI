@@ -15,6 +15,30 @@ import {
   Heart
 } from "lucide-react";
 
+const demoUseCases = [
+  {
+    title: "Requirement → execution plan",
+    description: "Turn a proposed feature into affected services, owners, risks, tests, and an explainable plan.",
+    query: "Add WhatsApp notifications for order updates",
+    href: "/analyzer",
+    capability: "Knowledge-to-Action",
+  },
+  {
+    title: "Incident → root-cause context",
+    description: "Trace an outage to services, prior incidents, runbooks, and the right responders.",
+    query: "Investigate INC-212 Payment API Gateway Timeout",
+    href: "/incidents",
+    capability: "Knowledge Graph Reasoning",
+  },
+  {
+    title: "Service → the right expert",
+    description: "Find owners, architects, and subject-matter experts before making a change.",
+    query: "Who owns Checkout Service?",
+    href: "/experts",
+    capability: "Reusable Agent Skills",
+  },
+];
+
 interface Stats {
   services: number;
   repositories: number;
@@ -120,6 +144,32 @@ export default function HomeDashboard() {
             Analyze Requirement
             <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
           </Link>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-indigo-500/25 bg-indigo-950/20 p-6">
+        <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-end">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-300">Start a guided demo</p>
+            <h3 className="mt-1 text-lg font-bold text-white">Choose a real engineering question</h3>
+            <p className="mt-1 text-sm text-slate-400">Open a use case, run its sample question, then review the recommendation and Explainability Panel.</p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-wider">
+            {["Reusable Agent Skills", "Agent Handoffs", "Knowledge-to-Action", "MCP Integrations", "Knowledge Graph Reasoning"].map((item) => (
+              <span key={item} className="rounded-full border border-indigo-400/25 bg-indigo-400/10 px-2.5 py-1 text-indigo-200">✓ {item}</span>
+            ))}
+          </div>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {demoUseCases.map((useCase) => (
+            <Link key={useCase.title} href={useCase.href} className="group rounded-xl border border-slate-800 bg-slate-950/65 p-4 transition hover:border-indigo-400/50 hover:bg-slate-900">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-indigo-300">{useCase.capability}</p>
+              <h4 className="mt-2 text-sm font-bold text-white">{useCase.title}</h4>
+              <p className="mt-2 min-h-10 text-xs leading-relaxed text-slate-400">{useCase.description}</p>
+              <p className="mt-3 rounded-md bg-slate-900 px-2 py-1.5 font-mono text-[10px] text-slate-300">Try: “{useCase.query}”</p>
+              <p className="mt-3 flex items-center gap-1 text-xs font-semibold text-indigo-300">Open use case <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" /></p>
+            </Link>
+          ))}
         </div>
       </div>
 

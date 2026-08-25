@@ -1,6 +1,8 @@
 # Build the browser bundle once, then serve it and the FastAPI API from one container.
 FROM node:20-slim AS frontend-build
 WORKDIR /frontend
+# Tailwind is a build-time dependency. Keep it available even if Render supplies NODE_ENV.
+ENV NODE_ENV=development
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
@@ -9,7 +11,8 @@ RUN npm run build
 FROM python:3.10-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    NODE_ENV=production
 
 COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt

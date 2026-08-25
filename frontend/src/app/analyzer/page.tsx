@@ -153,8 +153,19 @@ export default function RequirementAnalyzer() {
       <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl">
         <h3 className="font-bold text-base text-white mb-2">Analyze Proposed Engineering Requirement</h3>
         <p className="text-slate-400 text-xs mb-6">
-          Input a new product feature description below. The orchestrator will mobilize specialized agents (Impact, Ontology, Experts) to formulate an execution plan.
+          Enter a feature request, such as “Add WhatsApp notifications for order updates.” Run Agents to see the execution plan in the center, the agent handoff trace on the left, and the evidence-backed Explainability Panel on the right.
         </p>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {[
+            "Add WhatsApp notifications for order updates",
+            "Implement order status emails",
+            "Create a payment retry workflow",
+          ].map((example) => (
+            <button key={example} type="button" onClick={() => setQuery(example)} disabled={loading} className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5 text-[11px] text-slate-300 transition hover:border-indigo-400 hover:text-white disabled:opacity-50">
+              Try: {example}
+            </button>
+          ))}
+        </div>
         
         <form onSubmit={handleSubmit} className="flex gap-4">
           <input
