@@ -2,10 +2,10 @@
 FROM node:20-slim AS frontend-build
 WORKDIR /frontend
 # Tailwind is a build-time dependency. Keep it available even if Render supplies NODE_ENV.
-ENV NODE_ENV=development
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN npm ci --include=dev
 COPY frontend/ ./
+ENV NODE_ENV=production
 RUN npm run build
 
 FROM python:3.10-slim
