@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Archive, CheckCircle2, CloudUpload, FolderGit2, GitBranch, LockKeyhole, Sparkles } from "lucide-react";
+import { Archive, CheckCircle2, CloudUpload, FolderGit2, GitBranch, LockKeyhole, Sparkles, Trash2 } from "lucide-react";
 
 type RepositoryProfile = {
   repository: string;
@@ -75,13 +75,36 @@ export default function RepositoryIntakePage() {
   return (
     <div className="mx-auto max-w-5xl space-y-7 animate-fadeIn">
       <div className="rounded-2xl border border-indigo-500/25 bg-gradient-to-r from-indigo-950/35 via-slate-900 to-slate-900 p-7">
-        <div className="flex items-start gap-4">
-          <div className="rounded-xl bg-indigo-500/15 p-3"><FolderGit2 className="h-7 w-7 text-indigo-300" /></div>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-300">Bring your own engineering context</p>
-            <h2 className="mt-1 text-2xl font-bold text-white">Repository Intake</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">Add a repository source to the Engineering Brain. The next ingestion step maps its code, APIs, dependencies, documentation, and ownership into the knowledge graph.</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="rounded-xl bg-indigo-500/15 p-3"><FolderGit2 className="h-7 w-7 text-indigo-300" /></div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-300">Bring your own engineering context</p>
+              <h2 className="mt-1 text-2xl font-bold text-white">Repository Intake</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">Add a repository source to the Engineering Brain. The next ingestion step maps its code, APIs, dependencies, documentation, and ownership into the knowledge graph.</p>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={async () => {
+              if (confirm("Are you sure you want to clear the entire graph database and vector index? This deletes all demo and uploaded repositories.")) {
+                try {
+                  const res = await fetch("/api/v1/database/clear", { method: "POST" });
+                  if (res.ok) {
+                    alert("Database cleared successfully!");
+                    window.location.reload();
+                  } else {
+                    alert("Failed to clear database.");
+                  }
+                } catch (e) {
+                  alert("Error: " + e);
+                }
+              }
+            }}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-rose-500/35 bg-rose-500/10 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-rose-300 transition hover:border-rose-500 hover:bg-rose-500/20 active:bg-rose-500/30"
+          >
+            <Trash2 className="h-4 w-4" /> Clear Database
+          </button>
         </div>
       </div>
 

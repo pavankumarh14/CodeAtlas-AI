@@ -191,6 +191,180 @@ def import_public_repository(request: RepositoryImportRequest):
         logger.exception("Public repository lookup failed")
         raise HTTPException(status_code=502, detail="Could not reach GitHub. Please try again.")
 
+DOC_SUFFIXES = (".md", ".mdx", ".rst", ".txt", ".csv", ".xlsx", ".xls")
+
+def extract_file_content(filename: str, file_bytes: bytes) -> Optional[str]:
+    lower_name = filename.lower()
+    if lower_name.endswith((".md", ".mdx", ".rst", ".txt")):
+        return file_bytes.decode("utf-8", errors="ignore")
+    elif lower_name.endswith(".csv"):
+        try:
+            import csv
+            content = file_bytes.decode("utf-8", errors="ignore")
+            reader = csv.reader(io.StringIO(content))
+            text_content = []
+            for row in reader:
+                row_str = ", ".join([str(val) if val is not None else "" for val in row])
+                if row_str.strip(", "):
+                    text_content.append(row_str)
+            return "\n".join(text_content)
+        except Exception as e:
+            logger.error(f"Error parsing CSV {filename}: {e}")
+            return None
+    elif lower_name.endswith((".xlsx", ".xls")):
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+            text_content = []
+            for sheet_name in wb.sheetnames:
+                sheet = wb[sheet_name]
+                text_content.append(f"Sheet: {sheet_name}")
+                for row in sheet.iter_rows(values_only=True):
+                    row_str = ", ".join([str(val) if val is not None else "" for val in row])
+                    if row_str.strip(", "):
+                        text_content.append(row_str)
+            return "\n".join(text_content)
+        except Exception as e:
+            logger.error(f"Error parsing Excel {filename}: {e}")
+            return None
+    return None
+
+def extract_tables_from_zip(body: bytes) -> List[tuple[str, List[str], List[List[Any]]]]:
+    tables = []
+    with zipfile.ZipFile(io.BytesIO(body)) as z:
+        for path in z.namelist():
+            if path.endswith("/") or "__MACOSX" in path:
+                continue
+            lower_name = path.lower()
+            if lower_name.endswith((".xlsx", ".xls")):
+                try:
+                    import openpyxl
+                    with z.open(path) as f:
+                        wb = openpyxl.load_workbook(io.BytesIO(f.read()), read_only=True, data_only=True)
+                        for sheet_name in wb.sheetnames:
+                            sheet = wb[sheet_name]
+                            rows = []
+                            for row in sheet.iter_rows(values_only=True):
+                                rows.append(list(row))
+                            if len(rows) > 1:
+                                headers = [str(h).lower().strip() if h is not None else "" for h in rows[0]]
+                                data_rows = rows[1:]
+                                tables.append((f"{path}:{sheet_name}", headers, data_rows))
+                except Exception as e:
+                    logger.error(f"Error reading excel table {path}: {e}")
+            elif lower_name.endswith(".csv"):
+                try:
+                    import csv
+                    with z.open(path) as f:
+                        content = f.read().decode("utf-8", errors="ignore")
+                        reader = csv.reader(io.StringIO(content))
+                        rows = list(reader)
+                        if len(rows) > 1:
+                            headers = [str(h).lower().strip() if h is not None else "" for h in rows[0]]
+                            data_rows = rows[1:]
+                            tables.append((path, headers, data_rows))
+                except Exception as e:
+                    logger.error(f"Error reading CSV table {path}: {e}")
+    return tables
+
+def parse_table_and_add_to_graph(table_name: str, headers: List[str], rows: List[List[Any]], graph):
+    table_name = table_name.lower().strip()
+    
+    # 1. TEAM
+    if "team" in table_name:
+        name_idx = next((i for i, h in enumerate(headers) if "name" in h or "team" in h), -1)
+        if name_idx != -1:
+            for r in rows:
+                if len(r) > name_idx and r[name_idx]:
+                    team_name = str(r[name_idx]).strip()
+                    props = {headers[i]: str(val).strip() for i, val in enumerate(r) if val is not None and i < len(headers)}
+                    props["name"] = team_name
+                    graph.add_node("Team", props)
+                    
+    # 2. ENGINEER
+    elif "engineer" in table_name or "member" in table_name or "people" in table_name or "person" in table_name:
+        name_idx = next((i for i, h in enumerate(headers) if "name" in h or "engineer" in h), -1)
+        team_idx = next((i for i, h in enumerate(headers) if "team" in h), -1)
+        if name_idx != -1:
+            for r in rows:
+                if len(r) > name_idx and r[name_idx]:
+                    eng_name = str(r[name_idx]).strip()
+                    props = {headers[i]: str(val).strip() for i, val in enumerate(r) if val is not None and i < len(headers)}
+                    props["name"] = eng_name
+                    graph.add_node("Engineer", props)
+                    if team_idx != -1 and len(r) > team_idx and r[team_idx]:
+                        team_name = str(r[team_idx]).strip()
+                        graph.add_relationship("Engineer", eng_name, "Team", team_name, "MEMBER_OF")
+
+    # 3. SERVICE
+    elif "service" in table_name:
+        name_idx = next((i for i, h in enumerate(headers) if "name" in h or "service" in h), -1)
+        owner_idx = next((i for i, h in enumerate(headers) if "owner" in h or "team" in h), -1)
+        repo_idx = next((i for i, h in enumerate(headers) if "repo" in h or "repository" in h), -1)
+        if name_idx != -1:
+            for r in rows:
+                if len(r) > name_idx and r[name_idx]:
+                    svc_name = str(r[name_idx]).strip()
+                    props = {headers[i]: str(val).strip() for i, val in enumerate(r) if val is not None and i < len(headers)}
+                    props["name"] = svc_name
+                    graph.add_node("Service", props)
+                    if owner_idx != -1 and len(r) > owner_idx and r[owner_idx]:
+                        team_name = str(r[owner_idx]).strip()
+                        graph.add_relationship("Team", team_name, "Service", svc_name, "OWNS")
+                    if repo_idx != -1 and len(r) > repo_idx and r[repo_idx]:
+                        repo_name = str(r[repo_idx]).strip()
+                        graph.add_relationship("Repository", repo_name, "Service", svc_name, "CONTAINS")
+
+    # 4. REPOSITORY
+    elif "repo" in table_name:
+        name_idx = next((i for i, h in enumerate(headers) if "name" in h or "repo" in h), -1)
+        if name_idx != -1:
+            for r in rows:
+                if len(r) > name_idx and r[name_idx]:
+                    repo_name = str(r[name_idx]).strip()
+                    props = {headers[i]: str(val).strip() for i, val in enumerate(r) if val is not None and i < len(headers)}
+                    props["name"] = repo_name
+                    graph.add_node("Repository", props)
+
+    # 5. INCIDENT
+    elif "incident" in table_name or "bug" in table_name or "outage" in table_name:
+        id_idx = next((i for i, h in enumerate(headers) if "id" in h or "incident" in h or "bug" in h), -1)
+        title_idx = next((i for i, h in enumerate(headers) if "title" in h or "name" in h or "summary" in h), -1)
+        svc_idx = next((i for i, h in enumerate(headers) if "service" in h or "app" in h), -1)
+        if id_idx != -1:
+            for r in rows:
+                if len(r) > id_idx and r[id_idx]:
+                    inc_id = str(r[id_idx]).strip()
+                    title = str(r[title_idx]).strip() if (title_idx != -1 and len(r) > title_idx and r[title_idx]) else f"Incident {inc_id}"
+                    props = {headers[i]: str(val).strip() for i, val in enumerate(r) if val is not None and i < len(headers)}
+                    props["inc_id"] = inc_id
+                    props["title"] = title
+                    graph.add_node("Incident", props)
+                    if svc_idx != -1 and len(r) > svc_idx and r[svc_idx]:
+                        svc_name = str(r[svc_idx]).strip()
+                        graph.add_relationship("Incident", inc_id, "Service", svc_name, "AFFECTS")
+
+    # 6. DEPENDENCY / RELATIONSHIP
+    elif "dependency" in table_name or "dependencies" in table_name or "relation" in table_name or "relationship" in table_name:
+        src_idx = next((i for i, h in enumerate(headers) if "source" in h or "from" in h or "service" in h), -1)
+        tgt_idx = next((i for i, h in enumerate(headers) if "target" in h or "to" in h or "depends" in h or "uses" in h), -1)
+        type_idx = next((i for i, h in enumerate(headers) if "type" in h or "relation" in h), -1)
+        if src_idx != -1 and tgt_idx != -1:
+            for r in rows:
+                if len(r) > src_idx and r[src_idx] and len(r) > tgt_idx and r[tgt_idx]:
+                    src_name = str(r[src_idx]).strip()
+                    tgt_name = str(r[tgt_idx]).strip()
+                    rel_type = str(r[type_idx]).strip().upper() if (type_idx != -1 and len(r) > type_idx and r[type_idx]) else "DEPENDS_ON"
+                    
+                    src_label = "Service"
+                    tgt_label = "Service"
+                    if ":" in src_name:
+                        src_label, src_name = src_name.split(":", 1)
+                    if ":" in tgt_name:
+                        tgt_label, tgt_name = tgt_name.split(":", 1)
+                        
+                    graph.add_relationship(src_label.strip(), src_name.strip(), tgt_label.strip(), tgt_name.strip(), rel_type)
+
 @app.post("/api/v1/repositories/upload", tags=["Repository Intake"])
 async def upload_repository_zip(request: Request, filename: str):
     """Stage and inspect a local repository uploaded as a ZIP archive, adding it to the graph."""
@@ -212,7 +386,7 @@ async def upload_repository_zip(request: Request, filename: str):
             
         # Classify files
         manifests = [path for path in paths if path.rsplit("/", 1)[-1].lower() in MANIFEST_NAMES][:12]
-        documents = [path for path in paths if path.lower().endswith(DOC_SUFFIXES)][:12]
+        documents = [path for path in paths if path.lower().endswith(DOC_SUFFIXES)][:50]
         api_candidates = [path for path in paths if re.search(r"(^|/)(api|routes?|controllers?)(/|$)|/(route|controller)\.", path, re.IGNORECASE)][:12]
         
         # Detect languages based on file extensions
@@ -229,6 +403,9 @@ async def upload_repository_zip(request: Request, filename: str):
             ".cs": "C#",
             ".cpp": "C++",
             ".c": "C",
+            ".xlsx": "Excel",
+            ".xls": "Excel",
+            ".csv": "CSV",
         }
         detected_langs = set()
         for path in paths:
@@ -249,7 +426,7 @@ async def upload_repository_zip(request: Request, filename: str):
             "manifests": manifests,
             "documents": documents,
             "api_candidates": api_candidates,
-            "graph_nodes_added": 1 + len(documents),
+            "graph_nodes_added": 1,
         }
         
         # Add to graph
@@ -262,15 +439,53 @@ async def upload_repository_zip(request: Request, filename: str):
             "languages": ", ".join(profile["languages"]),
             "source": "Local ZIP upload",
         })
-        for path in profile["documents"]:
-            title = f"{profile['repository']} · {path}"
-            graph.add_node("Document", {"title": title, "path": path, "repository": profile["repository"], "source": "Local ZIP upload"})
-            graph.add_relationship("Repository", profile["repository"], "Document", title, "CONTAINS")
-            
+        
+        vector_store = get_vector_store()
+        nodes_added = 1
+        
+        # Process and index documents
+        with zipfile.ZipFile(io.BytesIO(body)) as z:
+            for path in documents:
+                try:
+                    with z.open(path) as f:
+                        file_bytes = f.read()
+                    
+                    content = extract_file_content(path, file_bytes)
+                    if content:
+                        # Index in Vector Store
+                        vector_store.add_texts(
+                            texts=[content],
+                            metadatas=[{"source": f"{repo_name} · {path}", "repository": repo_name, "path": path}],
+                            ids=[f"doc:{repo_name}:{path}"]
+                        )
+                        # Add node to Graph
+                        title = f"{repo_name} · {path}"
+                        graph.add_node("Document", {
+                            "title": title,
+                            "path": path,
+                            "repository": repo_name,
+                            "source": "Local ZIP upload",
+                            "content_summary": content[:500]
+                        })
+                        graph.add_relationship("Repository", repo_name, "Document", title, "CONTAINS")
+                        nodes_added += 1
+                except Exception as ex:
+                    logger.error(f"Error processing doc {path}: {ex}")
+                    
+            # Extract tables (Excels & CSVs) to dynamically construct Graph Nodes and Relationships!
+            try:
+                tables = extract_tables_from_zip(body)
+                for table_name, headers, data_rows in tables:
+                    parse_table_and_add_to_graph(table_name, headers, data_rows, graph)
+            except Exception as ex:
+                logger.error(f"Error extracting structural graph from tables: {ex}")
+                
+        profile["graph_nodes_added"] = nodes_added
+        
         # Add to activity log
         activity_log.insert(0, {
             "id": str(uuid.uuid4()), "timestamp": datetime.datetime.now().isoformat(),
-            "query": f"Uploaded local repository {profile['repository']}", "flow_type": "repository_intake",
+            "query": f"Uploaded local repository {profile['repository']} and parsed structure", "flow_type": "repository_intake",
             "target_agent": "Repository Intake", "duration_ms": 0, "status": "Success"
         })
         
@@ -279,6 +494,23 @@ async def upload_repository_zip(request: Request, filename: str):
         raise
     except Exception as e:
         logger.exception("ZIP upload failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/database/clear", tags=["Data"])
+def clear_database():
+    """Clear all nodes, relationships, and vector index entries to start fresh."""
+    try:
+        driver = get_graph_driver()
+        driver.clear()
+        
+        vector_store = get_vector_store()
+        vector_store.clear()
+        
+        activity_log.clear()
+        
+        return {"status": "success", "message": "Database and Vector Store cleared successfully."}
+    except Exception as e:
+        logger.error(f"Failed to clear database: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/agent-activity-log", tags=["Agents"])
