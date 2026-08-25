@@ -7,7 +7,8 @@ from .specialized_agents import (
     IncidentContextAgent,
     ArchitectureStorytellingAgent,
     KnowledgeGapAgent,
-    ArchitecturalImpactAgent
+    ArchitecturalImpactAgent,
+    DocumentQAAgent,
 )
 
 class AgentOrchestrator:
@@ -20,7 +21,8 @@ class AgentOrchestrator:
             "incident_context": IncidentContextAgent(),
             "architecture_storytelling": ArchitectureStorytellingAgent(),
             "knowledge_gap": KnowledgeGapAgent(),
-            "architectural_impact": ArchitecturalImpactAgent()
+            "architectural_impact": ArchitecturalImpactAgent(),
+            "document_qa": DocumentQAAgent(),
         }
 
     @staticmethod
@@ -39,8 +41,22 @@ class AgentOrchestrator:
     def _determine_flow(self, query: str) -> str:
         q = query.lower()
         
+        # ── Document Q&A: route here when query looks like a document/analysis question
+        # This takes priority when documents have been uploaded so we never show demo data.
+        doc_question_signals = [
+            "what are", "what is", "describe", "list all", "list the", "show me",
+            "how many", "which", "tell me about", "explain the", "steps", "workflow",
+            "process", "module", "feature", "functionality", "comms", "as-is", "to-be",
+            "analysis", "requirement", "mapping", "detail", "provide", "give me",
+        ]
+        if any(sig in q for sig in doc_question_signals):
+            # Only route to doc_qa if vector store has indexed documents
+            vs = self.agents["document_qa"].vector_store
+            if hasattr(vs, 'documents') and len(vs.documents) > 0:
+                return "document_qa"
+        
         # Collaborative requirement flow
-        if any(w in q for w in ["add", "implement", "create", "requirement", "new feature", "whatsapp", "notifications"]):
+        if any(w in q for w in ["add", "implement", "create", "new feature", "whatsapp", "notifications"]):
             return "requirement_pipeline"
             
         # Incident context route
@@ -61,7 +77,10 @@ class AgentOrchestrator:
         if any(w in q for w in ["gap", "undocumented", "missing", "health", "scan", "compliance"]):
             return "knowledge_gap"
             
-        # Default fallback
+        # Default: try document Q&A first, fall back to ontology mentor
+        vs = self.agents["document_qa"].vector_store
+        if hasattr(vs, 'documents') and len(vs.documents) > 0:
+            return "document_qa"
         return "ontology_mentor"
 
     def execute(self, query: str) -> Dict[str, Any]:

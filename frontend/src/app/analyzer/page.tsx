@@ -270,127 +270,156 @@ export default function RequirementAnalyzer() {
 
           {/* Structured Output Details */}
           <div className="xl:col-span-2 space-y-8 h-[750px] overflow-y-auto pr-2">
-            {/* Impact Assessment Card */}
-            <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-6">
-              <h3 className="font-bold text-base text-white flex items-center gap-2 border-b border-slate-800 pb-3">
-                <Layers className="h-5 w-5 text-indigo-400" />
-                Blast Radius & Ontology Impact
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Affected Services</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {result.results.impact_analysis?.services?.map((svc: string) => (
-                      <span key={svc} className="px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-medium">
-                        {svc}
-                      </span>
-                    ))}
+            {/* ── Document Q&A Answer ────────────────────────────────── */}
+            {(result.results.answer || result.results.key_findings) ? (
+              <>
+                <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-5">
+                  <h3 className="font-bold text-base text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                    <FileText className="h-5 w-5 text-indigo-400" />
+                    Document Analysis Result
+                  </h3>
+                  <div className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                    {result.results.answer}
                   </div>
-                </div>
 
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Target Repositories</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {result.results.impact_analysis?.repositories?.map((repo: string) => (
-                      <span key={repo} className="px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-medium font-mono">
-                        {repo}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Involved APIs</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {result.results.impact_analysis?.apis?.map((api: string) => (
-                      <span key={api} className="px-3 py-1.5 rounded-lg bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-medium font-mono">
-                        {api}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Service Context</h4>
-                  <div className="text-xs text-slate-300">
-                    <span className="font-semibold text-indigo-400">Capability:</span> {result.results.service_details?.business_capability}
-                    <p className="mt-1"><span className="font-semibold text-indigo-400">Purpose:</span> {result.results.service_details?.purpose}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Risk Rating Box */}
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-850 flex gap-3">
-                <ShieldAlert className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-200">Risk Assessment</h4>
-                  <p className="text-xs text-slate-400 mt-1">{result.results.impact_analysis?.risk || result.results.risks || "No elevated risk was identified by this agent."}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Implementation Recommendations Card */}
-            <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-6">
-              <h3 className="font-bold text-base text-white flex items-center gap-2 border-b border-slate-800 pb-3">
-                <FileText className="h-5 w-5 text-indigo-400" />
-                Synthesized Developer Playbook
-              </h3>
-
-              <div className="space-y-4">
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Implementation Guidelines</h4>
-                  <ul className="space-y-2">
-                    {result.results.generated_plan?.implementation.map((step: string, idx: number) => (
-                      <li key={idx} className="text-xs text-slate-300 flex items-start gap-2 bg-slate-950/40 p-2.5 rounded-lg border border-slate-850/50">
-                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 mt-2 shrink-0"></span>
-                        <span>{step}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Quality Assurance / Testing</h4>
-                  <ul className="space-y-2">
-                    {result.results.generated_plan?.testing.map((test: string, idx: number) => (
-                      <li key={idx} className="text-xs text-slate-300 flex items-start gap-2 bg-slate-950/40 p-2.5 rounded-lg border border-slate-850/50">
-                        <CheckSquare className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                        <span>{test}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div>
-                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Key Contacts & Reviewers</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950/80 p-4 rounded-xl border border-slate-850">
+                  {result.results.key_findings && result.results.key_findings.length > 0 && (
                     <div>
-                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">SMEs & Owners</span>
-                      <ul className="text-xs text-slate-300 space-y-1 mt-1">
-                        {result.results.key_contacts?.owners?.map((owner: string) => (
-                          <li key={owner} className="flex items-center gap-1.5">
-                            <Users className="h-3 w-3 text-slate-500" />
-                            {owner}
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Key Findings</h4>
+                      <ul className="space-y-2">
+                        {result.results.key_findings.map((finding: string, idx: number) => (
+                          <li key={idx} className="text-xs text-slate-300 flex items-start gap-2 bg-slate-950/40 p-3 rounded-lg border border-slate-800">
+                            <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 mt-2 shrink-0"></span>
+                            <span className="break-words">{finding}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {result.results.source_references && result.results.source_references.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Source References</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {result.results.source_references.map((ref: string, idx: number) => (
+                          <span key={idx} className="px-3 py-1.5 rounded-lg bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-medium">
+                            {ref}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {result.results.confidence && (
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-3">
+                      <ShieldAlert className="h-4 w-4 text-indigo-400 shrink-0" />
+                      <span className="text-xs text-slate-300">Confidence: <b className="text-white">{result.results.confidence}</b></span>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* ── Pipeline / Legacy Agent Card ──────────────────── */}
+                <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-6">
+                  <h3 className="font-bold text-base text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                    <Layers className="h-5 w-5 text-indigo-400" />
+                    Blast Radius & Ontology Impact
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Affected Services</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {result.results.impact_analysis?.services?.map((svc: string) => (
+                          <span key={svc} className="px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-medium">{svc}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Target Repositories</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {result.results.impact_analysis?.repositories?.map((repo: string) => (
+                          <span key={repo} className="px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-medium font-mono">{repo}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Involved APIs</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {result.results.impact_analysis?.apis?.map((api: string) => (
+                          <span key={api} className="px-3 py-1.5 rounded-lg bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-medium font-mono">{api}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Service Context</h4>
+                      <div className="text-xs text-slate-300">
+                        <span className="font-semibold text-indigo-400">Capability:</span> {result.results.service_details?.business_capability}
+                        <p className="mt-1"><span className="font-semibold text-indigo-400">Purpose:</span> {result.results.service_details?.purpose}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-850 flex gap-3">
+                    <ShieldAlert className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-200">Risk Assessment</h4>
+                      <p className="text-xs text-slate-400 mt-1">{result.results.impact_analysis?.risk || result.results.risks || "No elevated risk was identified by this agent."}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-6">
+                  <h3 className="font-bold text-base text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                    <FileText className="h-5 w-5 text-indigo-400" />
+                    Synthesized Developer Playbook
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Implementation Guidelines</h4>
+                      <ul className="space-y-2">
+                        {result.results.generated_plan?.implementation?.map((step: string, idx: number) => (
+                          <li key={idx} className="text-xs text-slate-300 flex items-start gap-2 bg-slate-950/40 p-2.5 rounded-lg border border-slate-850/50">
+                            <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 mt-2 shrink-0"></span>
+                            <span>{step}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
                     <div>
-                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Architects</span>
-                      <ul className="text-xs text-slate-300 space-y-1 mt-1">
-                        {result.results.key_contacts?.architects?.map((arch: string) => (
-                          <li key={arch} className="flex items-center gap-1.5">
-                            <Settings className="h-3 w-3 text-slate-500" />
-                            {arch}
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Quality Assurance / Testing</h4>
+                      <ul className="space-y-2">
+                        {result.results.generated_plan?.testing?.map((test: string, idx: number) => (
+                          <li key={idx} className="text-xs text-slate-300 flex items-start gap-2 bg-slate-950/40 p-2.5 rounded-lg border border-slate-850/50">
+                            <CheckSquare className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                            <span>{test}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Key Contacts &amp; Reviewers</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950/80 p-4 rounded-xl border border-slate-850">
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">SMEs &amp; Owners</span>
+                          <ul className="text-xs text-slate-300 space-y-1 mt-1">
+                            {result.results.key_contacts?.owners?.map((owner: string) => (
+                              <li key={owner} className="flex items-center gap-1.5"><Users className="h-3 w-3 text-slate-500" />{owner}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Architects</span>
+                          <ul className="text-xs text-slate-300 space-y-1 mt-1">
+                            {result.results.key_contacts?.architects?.map((arch: string) => (
+                              <li key={arch} className="flex items-center gap-1.5"><Settings className="h-3 w-3 text-slate-500" />{arch}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
 
           <div className="xl:col-span-1 h-[750px] overflow-y-auto">

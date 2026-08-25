@@ -841,3 +841,162 @@ class ArchitecturalImpactAgent(BaseAgent):
             "result": result,
             "explainability": explainability
         }
+
+
+class DocumentQAAgent(BaseAgent):
+    """
+    General-purpose RAG agent.
+    Retrieves relevant chunks from the vector store (uploaded Excel / CSV / Markdown)
+    and synthesises an answer — either via LLM or a structured fallback that shows the
+    raw retrieved evidence so the user always gets real data, never demo data.
+    """
+
+    def __init__(self):
+        super().__init__(
+            name="Document Q&A Agent",
+            description="Answers questions by retrieving and synthesising content from uploaded documents (Excel sheets, CSVs, Markdown files)."
+        )
+
+    def run(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        trace = [
+            "Initializing Document Q&A Agent...",
+            f"Performing semantic search across indexed documents for: '{query[:120]}'"
+        ]
+
+        # ── 1. Vector Store retrieval ──────────────────────────────────────
+        matches = self.vector_store.similarity_search(query, k=8)
+        trace.append(f"Retrieved {len(matches)} candidate chunks from vector store.")
+
+        relevant = [m for m in matches if m["score"] > 0.0]
+        if not relevant:
+            # If no scored matches try top-k anyway (store may be empty or query very generic)
+            relevant = matches[:5]
+
+        # ── 2. Build context for LLM / fallback ───────────────────────────
+        context_blocks: List[str] = []
+        documents_consulted: List[str] = []
+        nodes_traversed: List[str] = []
+
+        for m in relevant:
+            src = m["metadata"].get("source", m["id"])
+            sheet = m["metadata"].get("sheet", "")
+            label = f"{src} ({sheet})" if sheet else src
+            documents_consulted.append(label)
+            nodes_traversed.append(f"Document:{src}")
+            # Trim each chunk to avoid token overflow
+            context_blocks.append(f"--- Source: {label} ---\n{m['text'][:3000]}")
+
+        context_text = "\n\n".join(context_blocks)
+
+        # ── 3. LLM synthesis (Gemini / OpenAI) ────────────────────────────
+        if self.openai_client and context_text.strip():
+            trace.append("Calling LLM to synthesise answer from retrieved document chunks...")
+            system_prompt = (
+                "You are a Document Q&A Agent for an engineering knowledge platform. "
+                "You are given chunks of content retrieved from uploaded documents (Excel sheets, CSVs, Markdown). "
+                "Answer the user's question ONLY from the provided context. "
+                "Be specific, reference sheet names and column values where relevant. "
+                "Format your response as JSON with this schema:\n"
+                "{\n"
+                "  \"answer\": \"string (detailed answer)\",\n"
+                "  \"key_findings\": [\"string\"],\n"
+                "  \"source_references\": [\"string\"],\n"
+                "  \"confidence\": \"High | Medium | Low\"\n"
+                "}"
+            )
+            user_prompt = (
+                f"User question: {query}\n\n"
+                f"Retrieved document context:\n{context_text}"
+            )
+            llm_raw = self.call_llm(system_prompt, user_prompt)
+            # Strip markdown code fences if LLM wraps in ```json
+            llm_raw = llm_raw.strip()
+            if llm_raw.startswith("```"):
+                llm_raw = "\n".join(llm_raw.split("\n")[1:])
+                if llm_raw.endswith("```"):
+                    llm_raw = llm_raw[: llm_raw.rfind("```")]
+            try:
+                result = json.loads(llm_raw)
+                trace.append("LLM synthesis completed successfully.")
+                return {
+                    "agent_name": self.name,
+                    "trace": trace,
+                    "result": result,
+                    "explainability": {
+                        "why_chosen": f"Retrieved {len(relevant)} document chunks matching the query and synthesised via LLM.",
+                        "nodes_traversed": nodes_traversed[:10],
+                        "documents_consulted": documents_consulted[:8],
+                        "similar_requirements": [],
+                        "confidence_score": 88,
+                        "contributing_agents": [self.name],
+                    },
+                }
+            except Exception as parse_err:
+                trace.append(f"LLM returned non-JSON response. Using raw text as answer. ({parse_err})")
+                result = {
+                    "answer": llm_raw,
+                    "key_findings": [],
+                    "source_references": documents_consulted[:5],
+                    "confidence": "Medium",
+                }
+                return {
+                    "agent_name": self.name,
+                    "trace": trace,
+                    "result": result,
+                    "explainability": {
+                        "why_chosen": "LLM produced a text answer from the retrieved document chunks.",
+                        "nodes_traversed": nodes_traversed[:10],
+                        "documents_consulted": documents_consulted[:8],
+                        "similar_requirements": [],
+                        "confidence_score": 75,
+                        "contributing_agents": [self.name],
+                    },
+                }
+
+        # ── 4. Fallback: return raw retrieved chunks clearly labelled ──────
+        trace.append("No LLM configured. Returning raw retrieved document excerpts as structured answer.")
+
+        if not relevant:
+            answer = (
+                "No indexed documents were found matching this query. "
+                "Please upload a ZIP file containing your Excel, CSV, or Markdown files via Repository Intake, "
+                "then try again."
+            )
+            key_findings: List[str] = []
+        else:
+            findings: List[str] = []
+            for m in relevant[:5]:
+                src = m["metadata"].get("source", m["id"])
+                sheet = m["metadata"].get("sheet", "")
+                label = f"{src} ({sheet})" if sheet else src
+                # Show first meaningful lines of the chunk
+                lines = [l.strip() for l in m["text"].split("\n") if l.strip()][:10]
+                excerpt = " | ".join(lines)
+                findings.append(f"[{label}]: {excerpt}")
+            answer = (
+                f"Found {len(relevant)} relevant sections in your uploaded documents. "
+                "Configure a Gemini or OpenAI API key (GEMINI_API_KEY or OPENAI_API_KEY) "
+                "in your Render environment variables to get an AI-synthesised answer. "
+                "Raw retrieved evidence is shown in key_findings below."
+            )
+            key_findings = findings
+
+        result = {
+            "answer": answer,
+            "key_findings": key_findings,
+            "source_references": documents_consulted[:8],
+            "confidence": "Low (no LLM configured)" if not self.openai_client else "Medium",
+        }
+        return {
+            "agent_name": self.name,
+            "trace": trace,
+            "result": result,
+            "explainability": {
+                "why_chosen": "Document Q&A Agent selected because query requires content from uploaded files.",
+                "nodes_traversed": nodes_traversed[:10],
+                "documents_consulted": documents_consulted[:8],
+                "similar_requirements": [],
+                "confidence_score": 60,
+                "contributing_agents": [self.name],
+            },
+        }
