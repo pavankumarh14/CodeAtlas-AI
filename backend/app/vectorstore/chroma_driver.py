@@ -38,13 +38,14 @@ class ChromaVectorStore(BaseVectorStore):
         )
         logger.info(f"Added {len(texts)} documents to ChromaDB.")
 
-    def similarity_search(self, query: str, k: int = 3) -> List[Dict[str, Any]]:
+    def similarity_search(self, query: str, k: int = 3, metadata_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         if not self.collection:
             raise ConnectionError("ChromaVectorStore is not connected.")
         
         results = self.collection.query(
             query_texts=[query],
-            n_results=k
+            n_results=k,
+            **({"where": metadata_filter} if metadata_filter else {})
         )
         
         formatted_results = []

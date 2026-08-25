@@ -1,6 +1,6 @@
 import math
 import re
-from typing import List, Dict, Any, Set
+from typing import List, Dict, Any, Set, Optional
 import logging
 from .base import BaseVectorStore
 
@@ -52,7 +52,17 @@ class InMemoryVectorStore(BaseVectorStore):
             return 0.0
         return float(numerator) / denominator
 
-    def similarity_search(self, query: str, k: int = 3) -> List[Dict[str, Any]]:
+    def similarity_search(self, query: str, k: int = 3, metadata_filter: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        documents = self.documents
+        if metadata_filter:
+            documents = [
+                doc for doc in documents
+                if all(
+                    (key in doc["metadata"] and doc["metadata"].get(key) != value.get("$ne") if isinstance(value, dict) and "$ne" in value
+                     else doc["metadata"].get(key) == value)
+                    for key, value in metadata_filter.items()
+                )
+            ]
         query_tokens = self._tokenize(query)
         if not query_tokens:
             # If query is empty, return top k arbitrary documents
@@ -61,12 +71,12 @@ class InMemoryVectorStore(BaseVectorStore):
                 "text": doc["text"],
                 "metadata": doc["metadata"],
                 "score": 0.0
-            } for doc in self.documents[:k]]
+            } for doc in documents[:k]]
             
         query_tf = self._compute_tf(query_tokens)
         
         results = []
-        for doc in self.documents:
+        for doc in documents:
             doc_tokens = self._tokenize(doc["text"])
             doc_tf = self._compute_tf(doc_tokens)
             similarity = self._cosine_similarity(query_tf, doc_tf)

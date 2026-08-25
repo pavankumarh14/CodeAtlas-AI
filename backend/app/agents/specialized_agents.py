@@ -864,13 +864,14 @@ class DocumentQAAgent(BaseAgent):
         ]
 
         # ── 1. Vector Store retrieval ──────────────────────────────────────
-        matches = self.vector_store.similarity_search(query, k=8)
-        trace.append(f"Retrieved {len(matches)} candidate chunks from vector store.")
+        matches = self.vector_store.similarity_search(
+            # `repository` is present on every ZIP-imported chunk, including uploads
+            # made before the explicit origin marker was introduced.
+            query, k=8, metadata_filter={"repository": {"$ne": ""}}
+        )
+        trace.append(f"Retrieved {len(matches)} candidate chunks from uploaded files only.")
 
         relevant = [m for m in matches if m["score"] > 0.0]
-        if not relevant:
-            # If no scored matches try top-k anyway (store may be empty or query very generic)
-            relevant = matches[:5]
 
         # ── 2. Build context for LLM / fallback ───────────────────────────
         context_blocks: List[str] = []
@@ -893,7 +894,7 @@ class DocumentQAAgent(BaseAgent):
             trace.append("Calling LLM to synthesise answer from retrieved document chunks...")
             system_prompt = (
                 "You are a Document Q&A Agent for an engineering knowledge platform. "
-                "You are given chunks of content retrieved from uploaded documents (Excel sheets, CSVs, Markdown). "
+                "You are given chunks of content retrieved only from user-uploaded documents (Excel sheets, CSVs, Markdown). "
                 "Answer the user's question ONLY from the provided context. "
                 "Be specific, reference sheet names and column values where relevant. "
                 "Format your response as JSON with this schema:\n"
@@ -958,9 +959,9 @@ class DocumentQAAgent(BaseAgent):
 
         if not relevant:
             answer = (
-                "No indexed documents were found matching this query. "
-                "Please upload a ZIP file containing your Excel, CSV, or Markdown files via Repository Intake, "
-                "then try again."
+                "No relevant content was found in the uploaded files for this query. "
+                "No demo data or inferred workflow has been used. Try using the wording from the source file, "
+                "or upload the file that contains this feature."
             )
             key_findings: List[str] = []
         else:

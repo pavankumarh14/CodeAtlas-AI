@@ -533,7 +533,7 @@ async def upload_repository_zip(request: Request, filename: str):
                         if content.strip():
                             vector_store.add_texts(
                                 texts=[content],
-                                metadatas=[{"source": f"{repo_name} · {path}", "repository": repo_name, "path": path}],
+                                metadatas=[{"source": f"{repo_name} · {path}", "repository": repo_name, "path": path, "origin": "uploaded"}],
                                 ids=[f"doc:{repo_name}:{path}"]
                             )
                             title = f"{repo_name} · {path}"
@@ -571,7 +571,7 @@ async def upload_repository_zip(request: Request, filename: str):
                                 sheet_id = f"{path}:{sheet_name}"
                                 vector_store.add_texts(
                                     texts=[sheet_text],
-                                    metadatas=[{"source": sheet_id, "repository": repo_name, "path": path, "sheet": sheet_name}],
+                                    metadatas=[{"source": sheet_id, "repository": repo_name, "path": path, "sheet": sheet_name, "origin": "uploaded"}],
                                     ids=[f"doc:{repo_name}:{sheet_id}"]
                                 )
                                 logger.info(f"Indexed sheet '{sheet_name}' from '{path}' into vector store ({len(all_rows)} rows)")
@@ -603,7 +603,7 @@ async def upload_repository_zip(request: Request, filename: str):
                                 sheet_text = f"File: {path}\n" + "\n".join([", ".join(r) for r in rows if any(c.strip() for c in r)])
                                 vector_store.add_texts(
                                     texts=[sheet_text],
-                                    metadatas=[{"source": path, "repository": repo_name, "path": path}],
+                                    metadatas=[{"source": path, "repository": repo_name, "path": path, "origin": "uploaded"}],
                                     ids=[f"doc:{repo_name}:{path}"]
                                 )
                                 logger.info(f"Indexed CSV '{path}' into vector store ({len(rows)} rows)")

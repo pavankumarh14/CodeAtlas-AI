@@ -29,14 +29,29 @@ class AgentOrchestrator:
     def _with_explainability(explainability: Optional[Dict[str, Any]], query: str, agent_name: str) -> Dict[str, Any]:
         """Guarantee the audit fields required beside every agent recommendation."""
         evidence = explainability or {}
+        is_document_answer = agent_name == "Document Q&A Agent"
         return {
             "why_chosen": evidence.get("why_chosen") or f"{agent_name} selected this answer after evaluating the engineering context for '{query}'.",
-            "nodes_traversed": evidence.get("nodes_traversed") or ["Service:Engineering Knowledge Graph"],
-            "documents_consulted": evidence.get("documents_consulted") or ["Engineering ontology index"],
+            "nodes_traversed": evidence.get("nodes_traversed") or (["No uploaded graph nodes traversed"] if is_document_answer else ["Service:Engineering Knowledge Graph"]),
+            "documents_consulted": evidence.get("documents_consulted") or (["No relevant uploaded files were consulted"] if is_document_answer else ["Engineering ontology index"]),
             "similar_requirements": evidence.get("similar_requirements") or ["No directly comparable requirement was found"],
             "confidence_score": max(0, min(100, int(evidence.get("confidence_score", 70)))),
             "contributing_agents": evidence.get("contributing_agents") or [agent_name],
         }
+
+    def _has_uploaded_evidence(self) -> bool:
+        """Return true only for material the user imported, never the demo seed."""
+        graph_documents = self.agents["document_qa"].graph.get_nodes("Document")
+        if any(node["properties"].get("source") == "Local ZIP upload" for node in graph_documents):
+            return True
+
+        vector_store = self.agents["document_qa"].vector_store
+        # The in-memory store exposes its entries directly. Chroma-backed uploads are
+        # discoverable via their graph Document nodes above.
+        return any(
+            document["metadata"].get("origin") == "uploaded" or bool(document["metadata"].get("repository"))
+            for document in getattr(vector_store, "documents", [])
+        )
 
     def _determine_flow(self, query: str) -> str:
         q = query.lower()
@@ -50,9 +65,8 @@ class AgentOrchestrator:
             "analysis", "requirement", "mapping", "detail", "provide", "give me",
         ]
         if any(sig in q for sig in doc_question_signals):
-            # Only route to doc_qa if vector store has indexed documents
-            vs = self.agents["document_qa"].vector_store
-            if hasattr(vs, 'documents') and len(vs.documents) > 0:
+            # Uploaded evidence takes precedence over seeded demo content.
+            if self._has_uploaded_evidence():
                 return "document_qa"
         
         # Collaborative requirement flow
@@ -78,8 +92,7 @@ class AgentOrchestrator:
             return "knowledge_gap"
             
         # Default: try document Q&A first, fall back to ontology mentor
-        vs = self.agents["document_qa"].vector_store
-        if hasattr(vs, 'documents') and len(vs.documents) > 0:
+        if self._has_uploaded_evidence():
             return "document_qa"
         return "ontology_mentor"
 

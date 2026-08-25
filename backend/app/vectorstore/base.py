@@ -13,8 +13,11 @@ class BaseVectorStore(ABC):
         pass
 
     @abstractmethod
-    def similarity_search(self, query: str, k: int = 3) -> List[Dict[str, Any]]:
+    def similarity_search(
+        self, query: str, k: int = 3, metadata_filter: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
         """Query vector store for top-k similar documents.
+        metadata_filter restricts results to exact metadata matches when supplied.
         Returns a list of dicts: {"id": str, "text": str, "metadata": dict, "score": float}
         """
         pass

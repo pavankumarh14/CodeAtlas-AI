@@ -23,6 +23,7 @@ export default function RequirementAnalyzer() {
   const [query, setQuery] = useState("Add WhatsApp notifications for order updates");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
   const [activeStep, setActiveStep] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,6 +32,7 @@ export default function RequirementAnalyzer() {
 
     setLoading(true);
     setResult(null);
+    setError(null);
 
     const interval = setInterval(() => {
       setActiveStep(s => s + 1);
@@ -43,97 +45,15 @@ export default function RequirementAnalyzer() {
         body: JSON.stringify({ query })
       });
       
-      if (res.ok) {
-        const data = await res.json();
-        setResult(data);
-      } else {
-        alert("Failed to analyze. Please ensure the backend server is running.");
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.detail || "The analyzer could not reach the knowledge service.");
       }
+      const data = await res.json();
+      setResult(data);
     } catch (err) {
-      console.warn("Backend not active, using fallback simulation with Explainability Panel", err);
-      setTimeout(() => {
-        setResult({
-          flow_type: "pipeline",
-          target_agent: "Orchestrated Pipeline",
-          duration_seconds: 2.14,
-          execution_trace: [
-            "[Orchestrator] Received user query: 'Add WhatsApp notifications for order updates'",
-            "[Orchestrator] Evaluated query routing. Path chosen: REQUIREMENT_PIPELINE",
-            "[Orchestrator] Step 1/3: Dispatching to Requirement Impact Agent...",
-            "  [Requirement Impact Agent] Initializing Requirement Impact Agent...",
-            "  [Requirement Impact Agent] Searching semantic vector store for matching services and files...",
-            "  [Requirement Impact Agent] Traversing knowledge graph to find related dependencies and teams...",
-            "  [Requirement Impact Agent] Triggering pluggable GitHub and Jira MCP Adapters...",
-            "  [Requirement Impact Agent] Synthesizing impact assessment report...",
-            "[Orchestrator] Step 2/3: Handing off to Ontology Mentor Agent for: Notifications Service...",
-            "  [Ontology Mentor Agent] Querying graph database for neighbors, owners, and dependencies...",
-            "  [Ontology Mentor Agent] Generating response using Dynamic Reasoning Engine...",
-            "[Orchestrator] Step 3/3: Handing off to Expert Discovery Agent for service experts...",
-            "  [Expert Discovery Agent] Retrieving database ownership path: Service -> Team -> MEMBERS -> Engineer",
-            "[Orchestrator] Synthesizing collaborative reports into Implementation Plan...",
-            "[Orchestrator] Pipeline completed in 2.14s."
-          ],
-          explainability: {
-            why_chosen: "Synthesized orchestrated pipeline for requirement 'Add WhatsApp notifications for order updates'. Mobilized the Requirement Impact Agent to map dependencies, the Ontology Mentor to profile Notifications Service, and the Expert Finder to identify reviewers.",
-            nodes_traversed: [
-              "Service:Notifications Service",
-              "Service:Order Service",
-              "Repository:notifications-hub",
-              "Repository:order-processor",
-              "Team:Notifications Team",
-              "Engineer:Emma Jones",
-              "API:POST /api/v1/notifications/send"
-            ],
-            documents_consulted: [
-              "Jira Adapter: REQ-65 WhatsApp Specs",
-              "GitHub Adapter: notifications-hub repo logs",
-              "Confluence Space: Notifications Setup Docs"
-            ],
-            similar_requirements: [
-              "REQ-65: Implement WhatsApp Notifications for Order Status"
-            ],
-            confidence_score: 94,
-            contributing_agents: [
-              "Requirement Impact Agent",
-              "Ontology Mentor Agent",
-              "Expert Discovery Agent"
-            ]
-          },
-          results: {
-            requirement: query,
-            impact_analysis: {
-              services: ["Notifications Service", "Order Service"],
-              repositories: ["notifications-hub", "order-processor"],
-              apis: ["POST /api/v1/notifications/send"],
-              risk: "Medium Risk. Connecting to external Twilio/WhatsApp APIs. Network timeouts could cascade if order processing threads are held synchronously."
-            },
-            service_details: {
-              purpose: "Triggers transaction emails, transactional SMS, and messaging updates.",
-              business_capability: "Notifications Management",
-              dependencies: ["Auth Service"]
-            },
-            key_contacts: {
-              owners: ["Emma Jones (Engineer) - emma.jones@company.com", "Notifications Team (Team)"],
-              architects: ["Alex Architect (Chief Architect)"],
-              subject_matter_experts: ["Emma Jones"]
-            },
-            generated_plan: {
-              implementation: [
-                "1. Extend schemas in 'notifications-hub' to support WhatsApp payload schemas.",
-                "2. Implement WhatsApp dispatch client using external gateway webhooks.",
-                "3. Set up an asynchronous queue worker (e.g. Celery / BullMQ) to publish notifications.",
-                "4. Trigger notifications event publish from order-processor during order updates."
-              ],
-              testing: [
-                "1. Mock external WhatsApp API sandbox responses to test gateway success/failure.",
-                "2. Write unit tests for the message publisher client in order-processor.",
-                "3. Run end-to-end integration tests using docker-compose profiles."
-              ],
-              reviewers: ["Emma Jones (Notifications Team)", "Alex Architect (Platform Architect)"]
-            }
-          }
-        });
-      }, 2000);
+      console.error("Knowledge analysis request failed", err);
+      setError(err instanceof Error ? err.message : "Unable to analyze the uploaded knowledge.");
     } finally {
       clearInterval(interval);
       setLoading(false);
@@ -205,6 +125,12 @@ export default function RequirementAnalyzer() {
           </button>
         </form>
       </div>
+
+      {error && (
+        <div role="alert" className="rounded-xl border border-rose-500/40 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">
+          {error} No simulated or demo result was shown.
+        </div>
+      )}
 
       {/* Loading Animation State */}
       {loading && (

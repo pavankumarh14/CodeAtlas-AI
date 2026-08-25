@@ -117,7 +117,7 @@ def seed_all_data():
         # Add to vector store for semantic search
         vector_store.add_texts(
             texts=[f"Service Name: {svc['name']}. Purpose: {svc['purpose']}. Business Capability: {svc['capability']}. Risk Level: {svc['risk_level']}."],
-            metadatas=[{"type": "Service", "name": svc["name"]}],
+            metadatas=[{"type": "Service", "name": svc["name"], "origin": "demo"}],
             ids=[f"service-{svc['name'].lower().replace(' ', '-')}"]
         )
     logger.info("Seeded 20 Services and Team-owns-Service relationships.")
@@ -218,7 +218,7 @@ def seed_all_data():
         # Add to vector store for semantic search
         vector_store.add_texts(
             texts=[f"Requirement ID: {req_id}. Title: {req_data['title']}. Description: {req_data['description']}. Affected Service: {svc_name}."],
-            metadatas=[{"type": "Requirement", "id": req_id}],
+            metadatas=[{"type": "Requirement", "id": req_id, "origin": "demo"}],
             ids=[f"req-{req_id.lower()}"]
         )
     logger.info("Seeded 50 Requirements.")
@@ -254,7 +254,7 @@ def seed_all_data():
         # Add to vector store for semantic search
         vector_store.add_texts(
             texts=[f"Incident ID: {inc_id}. Title: {inc_data['title']}. Severity: {inc_data['severity']}. Root Cause: {inc_data['root_cause']}. Service Impacted: {svc_name}."],
-            metadatas=[{"type": "Incident", "id": inc_id}],
+            metadatas=[{"type": "Incident", "id": inc_id, "origin": "demo"}],
             ids=[f"incident-{inc_id.lower()}"]
         )
     logger.info("Seeded 30 Incidents.")
@@ -307,7 +307,7 @@ def seed_all_data():
         # Vector search seed
         vector_store.add_texts(
             texts=[f"Document: {doc['title']}. Content: {doc['content']}. Related Service: {doc['service']}"],
-            metadatas=[{"type": doc["type"], "title": doc["title"]}],
+            metadatas=[{"type": doc["type"], "title": doc["title"], "origin": "demo"}],
             ids=[f"doc-{doc['title'].lower().replace(' ', '-')}"]
         )
 
