@@ -16,6 +16,7 @@ class BaseAgent:
         self.vector_store = get_vector_store()
         self.mcp_adapters = get_mcp_adapters()
         self.openai_client = None
+        self.is_gemini = False
         
         if settings.OPENAI_API_KEY:
             try:
@@ -25,6 +26,16 @@ class BaseAgent:
                 )
             except Exception as e:
                 logger.error(f"Failed to initialize OpenAI client: {e}")
+        elif settings.GEMINI_API_KEY:
+            try:
+                self.openai_client = OpenAI(
+                    api_key=settings.GEMINI_API_KEY,
+                    base_url="https://generativelanguage.googleapis.com/v1beta/openai"
+                )
+                self.is_gemini = True
+                logger.info(f"Initialized OpenAI client with Gemini compatibility layer for agent {self.name}")
+            except Exception as e:
+                logger.error(f"Failed to initialize OpenAI client with Gemini: {e}")
 
     def call_llm(self, system_prompt: str, user_prompt: str, response_format: Optional[Dict[str, Any]] = None) -> str:
         """Call LLM if available, otherwise return empty string (subclasses handle fallback)."""
@@ -32,8 +43,9 @@ class BaseAgent:
             return ""
             
         try:
+            model = settings.GEMINI_MODEL if self.is_gemini else settings.OPENAI_MODEL
             kwargs = {
-                "model": settings.OPENAI_MODEL,
+                "model": model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
