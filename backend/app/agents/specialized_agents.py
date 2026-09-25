@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Dict, Any, List, Optional
 from .base import BaseAgent
 import logging
@@ -15,12 +16,25 @@ class OntologyMentorAgent(BaseAgent):
     def run(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         trace = ["Initializing Ontology Mentor Agent...", "Extracting entity name from query..."]
         
-        # Simple extraction of service name
-        service_name = "Checkout Service"  # Default
-        for word in ["checkout", "payment", "inventory", "notification", "order", "shipping", "auth", "delivery"]:
-            if word in query.lower():
-                service_name = f"{word.capitalize()} Service"
+        # Dynamic extraction of service name from graph
+        all_services = self.graph.get_nodes("Service")
+        service_name = None
+        for s in all_services:
+            sname = s["properties"].get("name", "")
+            if sname.lower() in query.lower():
+                service_name = sname
                 break
+        if not service_name:
+            for s in all_services:
+                sname = s["properties"].get("name", "")
+                words = [w for w in sname.lower().split() if len(w) > 3]
+                if any(w in query.lower() for w in words):
+                    service_name = sname
+                    break
+        if not service_name and all_services:
+            service_name = all_services[0]["properties"].get("name")
+        if not service_name:
+            service_name = "Core Platform & Analytics"
                 
         trace.append(f"Target entity identified: {service_name}")
         
@@ -111,22 +125,23 @@ class OntologyMentorAgent(BaseAgent):
             db_context = f"Service: {service_name}\nProperties: {graph_service}\nOwners: {owners}\nDependencies: {dependencies}\nRepositories: {repositories}\nIncidents: {incidents}\nDocs: {additional_info}"
             llm_res = self.call_llm(system_prompt, f"User query: {query}\n\nDB Context:\n{db_context}")
             try:
-                result = json.loads(llm_res)
-                trace.append("OpenAI reasoning completed.")
+                result = self.parse_llm_json(llm_res)
+                trace.append("LLM reasoning completed.")
                 return {
                     "agent_name": self.name,
                     "trace": trace,
                     "result": result,
                     "explainability": explainability
                 }
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to parse LLM JSON in {self.name}: {e}")
                 trace.append("Failed to parse LLM JSON. Falling back to dynamic rule-based synthesis.")
 
         # Rule-based fallback
         trace.append("Generating response using Dynamic Reasoning Engine...")
         risk_level = "High" if len(incidents) > 1 or len(dependencies) > 2 else "Medium"
-        capability = "Commerce"
-        purpose = "Processes transactions and checkouts"
+        capability = "Platform"
+        purpose = f"Provides core backend functionality for {service_name}"
         
         if graph_service:
             props = graph_service["properties"]
@@ -137,14 +152,14 @@ class OntologyMentorAgent(BaseAgent):
         result = {
             "purpose": purpose,
             "business_capability": capability,
-            "owners": owners if owners else ["Commerce Team (Team)"],
-            "dependencies": list(set(dependencies)) if dependencies else ["Payment Service", "Inventory Service"],
-            "risks": f"Risk level: {risk_level}. Affected by {len(incidents)} active incidents. Failure blocks user transactions.",
-            "repositories": repositories if repositories else [f"{service_name.lower().replace(' ', '-')}-api"],
+            "owners": owners if owners else ["Platform & Reliability Team (Team)"],
+            "dependencies": list(set(dependencies)) if dependencies else ["Core Platform & Analytics"],
+            "risks": f"Risk level: {risk_level}. Affected by {len(incidents)} active incidents.",
+            "repositories": repositories if repositories else [f"{service_name.lower().replace(' ', '-')}-repo"],
             "learning_path": [
-                f"1. Read the Confluence {service_name} architecture guide",
-                f"2. Inspect the repository '{repositories[0]}' if changes are needed" if repositories else "2. Clone git repo",
-                f"3. Run local setup or test cases"
+                f"1. Read architecture specifications for {service_name}",
+                f"2. Inspect repository '{repositories[0]}' and review test suites" if repositories else f"2. Inspect {service_name} codebase",
+                f"3. Verify telemetry metrics and alerting thresholds"
             ]
         }
         trace.append("Mentorship explanation generated successfully.")
@@ -170,26 +185,47 @@ class RequirementImpactAgent(BaseAgent):
         trace.append("Searching semantic vector store for matching services and files...")
         vector_matches = self.vector_store.similarity_search(query, k=3)
         
-        # Perform graph lookup based on keywords
+        # Perform graph lookup based on keywords and service profiles
         trace.append("Traversing knowledge graph to find related dependencies and teams...")
         all_services = self.graph.get_nodes("Service")
-        impacted_services = []
-        
-        # Find which services might be affected based on keywords
+
+        # Dynamically score services based on query terms
+        query_words = set(re.findall(r'\b[a-zA-Z0-9_\-]+\b', query.lower()))
+        stopwords = {"add", "implement", "create", "to", "for", "the", "a", "an", "in", "on", "and", "or", "is", "of", "with", "service", "system", "real", "time", "feature"}
+        tokens = query_words - stopwords
+
+        scored_services = []
         for s in all_services:
             name = s["properties"].get("name", "")
             purpose = s["properties"].get("purpose", "")
-            # Simple keyword match
-            keywords = [k for k in ["checkout", "payment", "notification", "whatsapp", "order", "inventory", "shipping"] if k in query.lower()]
-            for kw in keywords:
-                if kw in name.lower() or kw in purpose.lower():
-                    impacted_services.append(name)
-        
-        # Default if none matched
-        if not impacted_services:
-            impacted_services = ["Notifications Service", "Order Service"]
+            capability = s["properties"].get("capability", "")
             
-        impacted_services = list(set(impacted_services))
+            # Also get related repos
+            neighbors = self.graph.get_neighbors(name, "Service")
+            repo_names = [n["node"]["name"] for n in neighbors if "Repository" in n["node"]["labels"]]
+            
+            text_corpus = f"{name} {purpose} {capability} {' '.join(repo_names)}".lower()
+            score = 0
+            for token in tokens:
+                if token in name.lower() or any(token in r.lower() for r in repo_names):
+                    score += 3
+                elif token in text_corpus:
+                    score += 1
+            if score > 0:
+                scored_services.append((score, name))
+
+        scored_services.sort(key=lambda x: x[0], reverse=True)
+        impacted_services = [s[1] for s in scored_services[:3]]
+
+        # Fallback if none matched: check vector matches or first service
+        if not impacted_services:
+            for vm in vector_matches:
+                if vm.get("metadata", {}).get("type") == "Service":
+                    impacted_services.append(vm["metadata"].get("name"))
+            if not impacted_services and all_services:
+                impacted_services = [all_services[0]["properties"].get("name")]
+        
+        impacted_services = list(dict.fromkeys(impacted_services))
         
         # Gather owners and repositories for these services
         impacted_repos = []
@@ -234,21 +270,23 @@ class RequirementImpactAgent(BaseAgent):
         ]
         
         if not documents_consulted:
-            documents_consulted = ["Jira REQ-65 Specs", "GitHub notifications-hub repository logs"]
+            primary_svc = impacted_services[0] if impacted_services else "Service"
+            documents_consulted = [f"Architecture Specs for {primary_svc}", f"Runbooks and API contracts for {primary_svc}"]
 
+        primary_svc = impacted_services[0] if impacted_services else "Service"
         explainability = {
-            "why_chosen": f"Analyzed requirement text for notification and transaction keywords. Matched dependencies for {', '.join(impacted_services)} using ontology graph linkages.",
+            "why_chosen": f"Analyzed requirement text for architecture keywords. Matched dependencies for {', '.join(impacted_services)} using ontology graph linkages.",
             "nodes_traversed": nodes_traversed[:8],
             "documents_consulted": documents_consulted,
-            "similar_requirements": ["REQ-65: Implement WhatsApp Notifications for Order Status"],
-            "confidence_score": 88,
+            "similar_requirements": [f"REQ-101: Architectural enhancements for {primary_svc}"],
+            "confidence_score": 94,
             "contributing_agents": [self.name]
         }
 
         if self.openai_client:
             trace.append("Executing OpenAI LLM reasoning for Requirement Impact...")
             system_prompt = """You are a Requirement Impact Agent. Analyze a new system requirement and determine the impact.
-            Format your response as JSON matching this schema:
+            You must format your response as a valid JSON object with exactly this schema:
             {
               "affected_services": ["string"],
               "affected_repositories": ["string"],
@@ -261,29 +299,30 @@ class RequirementImpactAgent(BaseAgent):
             db_context = f"Requirement: {query}\nPotential Services: {impacted_services}\nRepos: {impacted_repos}\nTeams: {impacted_teams}\nAPIs: {apis}\nJira Issues: {mcp_issues}"
             llm_res = self.call_llm(system_prompt, db_context)
             try:
-                result = json.loads(llm_res)
-                trace.append("OpenAI reasoning completed.")
+                result = self.parse_llm_json(llm_res)
+                trace.append("LLM reasoning completed.")
                 return {
                     "agent_name": self.name,
                     "trace": trace,
                     "result": result,
                     "explainability": explainability
                 }
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to parse LLM JSON in {self.name}: {e}")
                 trace.append("Failed to parse LLM JSON. Falling back to dynamic rule-based synthesis.")
 
         trace.append("Synthesizing impact assessment report...")
         result = {
             "affected_services": impacted_services,
-            "affected_repositories": impacted_repos if impacted_repos else ["notifications-service-repo"],
-            "apis_involved": apis if apis else ["POST /api/v1/notifications/send"],
-            "teams_impacted": impacted_teams if impacted_teams else ["Core Platform Team"],
+            "affected_repositories": impacted_repos if impacted_repos else [f"{primary_svc.lower().replace(' ', '-')}-repo"],
+            "apis_involved": apis if apis else [f"POST /api/v1/{primary_svc.lower().split()[0]}/events"],
+            "teams_impacted": impacted_teams if impacted_teams else ["Core Platform & Reliability Team"],
             "dependencies": dependencies,
-            "risk_analysis": f"Medium Risk. WhatsApp integration requires connecting to external webhook APIs. Blasts checkout workflows if notifications fail synchronously.",
+            "risk_analysis": f"Low-to-Medium Risk. Upgrades to {primary_svc} require testing telemetry ingestion throughput, buffering limits, and downstream consumer latency.",
             "recommendations": [
-                "Implement WhatsApp notifications asynchronously using a message queue (RabbitMQ/SQS)",
-                "Create a circuit breaker around the WhatsApp Gateway API client",
-                f"Obtain approval from {impacted_teams[0]} since they own the impacted service" if impacted_teams else "Get team sign-off"
+                f"Implement asynchronous data streaming with backpressure controls in {primary_svc}",
+                f"Add circuit breakers around downstream service calls: {', '.join(dependencies[:2]) if dependencies else 'external integrations'}",
+                f"Obtain approval from {impacted_teams[0]} before promoting changes to production" if impacted_teams else "Obtain team architectural sign-off"
             ]
         }
         trace.append("Requirement impact analysis complete.")
@@ -305,11 +344,24 @@ class ExpertDiscoveryAgent(BaseAgent):
     def run(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         trace = ["Initializing Expert Discovery Agent...", "Parsing query for target components..."]
         
-        service_name = "Checkout Service"
-        for word in ["checkout", "payment", "inventory", "notification", "order", "shipping", "auth"]:
-            if word in query.lower():
-                service_name = f"{word.capitalize()} Service"
+        all_services = self.graph.get_nodes("Service")
+        service_name = None
+        for s in all_services:
+            sname = s["properties"].get("name", "")
+            if sname.lower() in query.lower():
+                service_name = sname
                 break
+        if not service_name:
+            for s in all_services:
+                sname = s["properties"].get("name", "")
+                words = [w for w in sname.lower().split() if len(w) > 3]
+                if any(w in query.lower() for w in words):
+                    service_name = sname
+                    break
+        if not service_name and all_services:
+            service_name = all_services[0]["properties"].get("name")
+        if not service_name:
+            service_name = "Core Platform & Analytics"
                 
         trace.append(f"Target Service: {service_name}")
         
@@ -330,7 +382,7 @@ class ExpertDiscoveryAgent(BaseAgent):
         architects = []
         owners = []
         
-        # Traverse graph for engineers
+        # Traverse graph for engineers via Team
         all_engineers = self.graph.get_nodes("Engineer")
         for team_name in teams:
             team_neighs = self.graph.get_neighbors(team_name, "Team")
@@ -344,56 +396,75 @@ class ExpertDiscoveryAgent(BaseAgent):
                     owners.append(f"{eng_name} ({role}) - {email}")
                     contributors.append(eng_name)
                     
-                    if "Lead" in role or "Architect" in role:
+                    if "Lead" in role or "Architect" in role or "Principal" in role:
                         architects.append(eng_name)
                     if "Senior" in role or "Staff" in role:
                         smes.append(eng_name)
 
+        # Also traverse engineers who WORKED_ON repositories implementing this service
+        for neigh in neighbors:
+            if "Repository" in neigh["node"]["labels"]:
+                repo_name = neigh["node"]["name"]
+                repo_neighs = self.graph.get_neighbors(repo_name, "Repository")
+                for rn in repo_neighs:
+                    if "Engineer" in rn["node"]["labels"]:
+                        eng_name = rn["node"]["name"]
+                        role = rn["node"]["properties"].get("role", "Committer")
+                        email = rn["node"]["properties"].get("email", "")
+                        contributors.append(eng_name)
+                        owners.append(f"{eng_name} ({role}) - {email}")
+                        nodes_traversed.append(f"Engineer:{eng_name}")
+                        if "Lead" in role or "Architect" in role or "Principal" in role:
+                            architects.append(eng_name)
+                        if "Senior" in role or "Staff" in role:
+                            smes.append(eng_name)
+
         if not owners:
-            owners = ["Sarah Smith (Lead Engineer) - sarah@company.com", "Commerce Team (Team)"]
-            contributors = ["Sarah Smith", "John Doe"]
-            smes = ["Sarah Smith"]
-            architects = ["Alex Architect"]
-            nodes_traversed.extend(["Engineer:Sarah Smith", "Engineer:John Doe"])
+            owners = ["Pavan Kumar H (Principal Systems Architect) - pavankumarh14@github.com", "Core Platform & Analytics Team"]
+            contributors = ["Pavan Kumar H"]
+            smes = ["Pavan Kumar H"]
+            architects = ["Pavan Kumar H (Principal Systems Architect)"]
+            nodes_traversed.append("Engineer:Pavan Kumar H")
 
         explainability = {
             "why_chosen": f"Matched the requested service '{service_name}' with team ownership nodes and queried active membership listings.",
-            "nodes_traversed": nodes_traversed,
-            "documents_consulted": [f"Team Membership Directory", f"GitHub code contribution logs for {service_name}"],
+            "nodes_traversed": list(dict.fromkeys(nodes_traversed))[:8],
+            "documents_consulted": [f"Team Ownership Directory for {service_name}", f"Git contribution logs for {service_name}"],
             "similar_requirements": [],
-            "confidence_score": 100,
+            "confidence_score": 96,
             "contributing_agents": [self.name]
         }
 
         if self.openai_client:
-            trace.append("Querying OpenAI to format expert profiling...")
+            trace.append("Querying OpenAI/LLM to format expert profiling...")
             system_prompt = """You are an Expert Discovery Agent. Identify the owners, contributors, architects, and SMEs.
-            Format your response as JSON matching this schema:
+            Format your response as a valid JSON object matching this schema:
             {
               "owners": ["string"],
               "contributors": ["string"],
               "architects": ["string"],
               "subject_matter_experts": ["string"]
             }"""
-            db_context = f"Service: {service_name}\nTeams: {teams}\nEngineers: {owners}"
+            db_context = f"Service: {service_name}\nTeams: {teams}\nEngineers: {owners}\nContributors: {contributors}"
             llm_res = self.call_llm(system_prompt, db_context)
             try:
-                result = json.loads(llm_res)
-                trace.append("OpenAI reasoning completed.")
+                result = self.parse_llm_json(llm_res)
+                trace.append("LLM reasoning completed.")
                 return {
                     "agent_name": self.name,
                     "trace": trace,
                     "result": result,
                     "explainability": explainability
                 }
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to parse LLM JSON in {self.name}: {e}")
                 trace.append("Failed to parse LLM JSON. Falling back to dynamic rule-based synthesis.")
 
         result = {
-            "owners": owners[:2],
-            "contributors": list(set(contributors)),
-            "architects": list(set(architects)) if architects else ["Alex Architect (Chief Architect)"],
-            "subject_matter_experts": list(set(smes)) if smes else ["Sarah Smith (Domain SME)"]
+            "owners": list(dict.fromkeys(owners))[:3],
+            "contributors": list(dict.fromkeys(contributors)),
+            "architects": list(dict.fromkeys(architects)) if architects else ["Pavan Kumar H (Principal Systems Architect)"],
+            "subject_matter_experts": list(dict.fromkeys(smes)) if smes else ["Pavan Kumar H (Domain SME)"]
         }
         trace.append("Expert discovery finished.")
         return {
@@ -496,29 +567,30 @@ class IncidentContextAgent(BaseAgent):
             db_context = f"Incident query: {query}\nRelated: {related_incidents}\nDeps: {dep_names}\nRunbooks: {runbooks}"
             llm_res = self.call_llm(system_prompt, db_context)
             try:
-                result = json.loads(llm_res)
-                trace.append("OpenAI reasoning completed.")
+                result = self.parse_llm_json(llm_res)
+                trace.append("LLM reasoning completed.")
                 return {
                     "agent_name": self.name,
                     "trace": trace,
                     "result": result,
                     "explainability": explainability
                 }
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to parse LLM JSON in {self.name}: {e}")
                 trace.append("Failed to parse LLM JSON. Falling back to dynamic rule-based synthesis.")
 
         result = {
             "related_incidents": [
-                {"id": r["id"], "title": r["title"], "relevance": "High Similarity (DB / Network Bottleneck)"}
+                {"id": r["id"], "title": r["title"], "relevance": "High Similarity"}
                 for r in related_incidents
             ],
             "dependencies": dep_names,
             "known_fixes": [
-                "Switch Stripe Gateway to secondary provider via feature flag (payment-circuit-breaker)",
-                "Increase database connections pooling limit in inventory-db configurations",
-                "Restart checkout-api pods to clear hung connections thread pool"
+                f"Verify active connection pool and telemetry socket buffers in {target_service}",
+                f"Inspect dependency health checks ({', '.join(dep_names[:2]) if dep_names else 'monitoring infra'})",
+                "Restart worker pods to clear stale connection backlog"
             ],
-            "escalation_path": "Level 1: Commerce On-Call -> Level 2: Platform DB Admin -> Level 3: Principal Architect (Alex)"
+            "escalation_path": f"Level 1: On-Call Team -> Level 2: {target_service} SME -> Level 3: Principal Architect (Pavan Kumar H)"
         }
         trace.append("Troubleshooting response compiled.")
         return {
@@ -582,15 +654,16 @@ class ArchitectureStorytellingAgent(BaseAgent):
             db_context = f"Query: {query}\nInteractions: {interactions}"
             llm_res = self.call_llm(system_prompt, db_context)
             try:
-                result = json.loads(llm_res)
-                trace.append("OpenAI reasoning completed.")
+                result = self.parse_llm_json(llm_res)
+                trace.append("LLM reasoning completed.")
                 return {
                     "agent_name": self.name,
                     "trace": trace,
                     "result": result,
                     "explainability": explainability
                 }
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to parse LLM JSON in {self.name}: {e}")
                 trace.append("Failed to parse LLM JSON. Falling back to dynamic rule-based synthesis.")
 
         result = {
@@ -700,15 +773,16 @@ class KnowledgeGapAgent(BaseAgent):
             db_context = f"Gaps: Undocumented={undocumented_services}, NoOwners={missing_ownership}, NoRunbooks={missing_runbooks}, Score={risk_score}"
             llm_res = self.call_llm(system_prompt, db_context)
             try:
-                result = json.loads(llm_res)
-                trace.append("OpenAI reasoning completed.")
+                result = self.parse_llm_json(llm_res)
+                trace.append("LLM reasoning completed.")
                 return {
                     "agent_name": self.name,
                     "trace": trace,
                     "result": result,
                     "explainability": explainability
                 }
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to parse LLM JSON in {self.name}: {e}")
                 trace.append("Failed to parse LLM JSON. Falling back to dynamic rule-based synthesis.")
 
         result = {
@@ -816,15 +890,16 @@ class ArchitecturalImpactAgent(BaseAgent):
             db_context = f"Failure: {service_name}\nAffectedServices: {affected_services}\nCapabilities: {affected_capabilities}\nTeams: {teams_impacted}\nIncidents: {hist_incidents}"
             llm_res = self.call_llm(system_prompt, db_context)
             try:
-                result = json.loads(llm_res)
-                trace.append("OpenAI reasoning completed.")
+                result = self.parse_llm_json(llm_res)
+                trace.append("LLM reasoning completed.")
                 return {
                     "agent_name": self.name,
                     "trace": trace,
                     "result": result,
                     "explainability": explainability
                 }
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to parse LLM JSON in {self.name}: {e}")
                 trace.append("Failed to parse LLM JSON. Falling back to dynamic rule-based synthesis.")
 
         result = {

@@ -44,6 +44,9 @@ export default function IncidentRoom() {
           if (active.length > 0) {
             setActiveIncidents(active);
             setSelectedIncident(active[0].inc_id);
+          } else {
+            setActiveIncidents([]);
+            setSelectedIncident("");
           }
         }
       } catch (err) {

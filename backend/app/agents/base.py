@@ -59,6 +59,41 @@ class BaseAgent:
         except Exception as e:
             logger.error(f"LLM API Call failed in agent {self.name}: {e}")
             return ""
+
+    def parse_llm_json(self, text: str) -> Any:
+        """Parse JSON response from LLM, safely stripping markdown code blocks if present."""
+        import json
+        if not text:
+            raise ValueError("Empty LLM response text")
+
+        clean = text.strip()
+        # Strip markdown fences ```json ... ``` or ``` ... ```
+        if clean.startswith("```"):
+            lines = clean.splitlines()
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            clean = "\n".join(lines).strip()
+
+        try:
+            return json.loads(clean)
+        except Exception:
+            pass
+
+        # Fallback: search for first { and last }
+        start = clean.find("{")
+        end = clean.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            return json.loads(clean[start:end+1])
+
+        # Or first [ and last ]
+        start = clean.find("[")
+        end = clean.rfind("]")
+        if start != -1 and end != -1 and end > start:
+            return json.loads(clean[start:end+1])
+
+        raise ValueError(f"Could not extract JSON from LLM output: {text[:120]}")
             
     def run(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Override in subclass. Should return a dictionary with keys:

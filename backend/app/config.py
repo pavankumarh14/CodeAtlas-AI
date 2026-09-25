@@ -22,7 +22,13 @@ class Settings:
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     
+    # Freshservice Settings
+    FRESHSERVICE_DOMAIN: str = os.getenv("FRESHSERVICE_DOMAIN", "freshworks065.freshservice.com")
+    FRESHSERVICE_API_KEY: str = os.getenv("FRESHSERVICE_API_KEY", "")
+    FRESHSERVICE_WORKSPACE_ID: str = os.getenv("FRESHSERVICE_WORKSPACE_ID", "")
+    
     # Fallback configuration
     FORCE_FALLBACK: bool = os.getenv("FORCE_FALLBACK", "false").lower() in ("true", "1", "yes")
+    AUTO_SEED: bool = os.getenv("AUTO_SEED", "true").lower() in ("true", "1", "yes")
 
 settings = Settings()

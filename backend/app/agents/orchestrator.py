@@ -150,8 +150,8 @@ class AgentOrchestrator:
                 "generated_plan": {
                     "implementation": impact_res["result"].get("recommendations", []),
                     "testing": [
-                        f"1. Integration test with WhatsApp sandbox APIs using mocked payload",
-                        f"2. Verify service logs in {primary_service.lower().replace(' ', '-')} for async notification publish event",
+                        f"1. Integration test verifying {primary_service} contract endpoints and data schemas",
+                        f"2. Verify service logs and telemetry metrics in {primary_service.lower().replace(' ', '-')}",
                         f"3. Run regression unit tests on {primary_service} dependencies"
                     ],
                     "reviewers": expert_res["result"].get("architects", []) + expert_res["result"].get("owners", [])

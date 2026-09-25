@@ -19,7 +19,7 @@ const CustomNode = ({ data }: any) => {
   const style = data.style || { background: "#fff", border: "#ccc", color: "#333" };
   return (
     <div 
-      className="px-4 py-3 rounded-lg border-2 shadow-lg transition-all duration-300 text-left min-w-[150px]"
+      className="px-4 py-3 rounded-xl border-2 shadow-lg transition-all duration-300 text-left min-w-[180px] max-w-[320px]"
       style={{ 
         background: style.background, 
         borderColor: style.border, 
@@ -27,10 +27,10 @@ const CustomNode = ({ data }: any) => {
       }}
     >
       <Handle type="target" position={Position.Left} style={{ background: style.border }} />
-      <span className="text-[9px] font-mono uppercase tracking-widest font-semibold opacity-60 block">
+      <span className="text-[9px] font-mono uppercase tracking-widest font-semibold opacity-70 block">
         {data.type}
       </span>
-      <span className="text-xs font-bold block mt-0.5 truncate">{data.label}</span>
+      <span className="text-xs font-bold block mt-0.5 truncate" title={data.label}>{data.label}</span>
       <Handle type="source" position={Position.Right} style={{ background: style.border }} />
     </div>
   );
@@ -43,24 +43,55 @@ const nodeTypes = {
 export default function GraphExplorer() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [allNodes, setAllNodes] = useState<any[]>([]);
+  const [allEdges, setAllEdges] = useState<any[]>([]);
+  const [activeFilter, setActiveFilter] = useState<string>("architecture");
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightMode, setHighlightMode] = useState<"none" | "upstream" | "downstream">("none");
 
+  const applyCategoryFilter = useCallback((filter: string, sourceNodes = allNodes, sourceEdges = allEdges) => {
+    setActiveFilter(filter);
+    if (!sourceNodes || sourceNodes.length === 0) {
+      setNodes([]);
+      setEdges([]);
+      return;
+    }
+
+    if (filter === "all") {
+      setNodes(sourceNodes);
+      setEdges(sourceEdges);
+      return;
+    }
+
+    let allowedTypes: string[] = [];
+    if (filter === "architecture") allowedTypes = ["Service", "Repository", "API"];
+    else if (filter === "ownership") allowedTypes = ["Team", "Engineer", "Service"];
+    else if (filter === "incidents") allowedTypes = ["Incident", "Service", "Runbook"];
+    else if (filter === "requirements") allowedTypes = ["Requirement", "Service"];
+
+    const filteredNodes = sourceNodes.filter((n) => allowedTypes.includes(n.data?.type));
+    const nodeIds = new Set(filteredNodes.map((n) => n.id));
+    const filteredEdges = sourceEdges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
+
+    setNodes(filteredNodes);
+    setEdges(filteredEdges);
+  }, [allNodes, allEdges, setNodes, setEdges]);
+
   // Fallback seed graph in case backend is not running
   const loadFallbackGraph = () => {
     const mockNodes: any[] = [
-      { id: "Team:Commerce Team", type: "customNode", position: { x: 100, y: 150 }, data: { label: "Commerce Team", type: "Team", properties: { description: "Manages checkouts and payments" }, style: { background: "#FFF3CD", border: "#FFC107", color: "#856404" } } },
-      { id: "Team:Notifications Team", type: "customNode", position: { x: 100, y: 350 }, data: { label: "Notifications Team", type: "Team", properties: { description: "Sends SMS and WhatsApp alerts" }, style: { background: "#FFF3CD", border: "#FFC107", color: "#856404" } } },
-      { id: "Engineer:Sarah Smith", type: "customNode", position: { x: 100, y: 50 }, data: { label: "Sarah Smith", type: "Engineer", properties: { role: "Lead Engineer", email: "sarah@company.com" }, style: { background: "#D4EDDA", border: "#28A745", color: "#155724" } } },
-      { id: "Service:Checkout Service", type: "customNode", position: { x: 400, y: 150 }, data: { label: "Checkout Service", type: "Service", properties: { purpose: "Handles customer checkout transactions", capability: "Commerce", risk_level: "High", failure_impact: "Revenue loss" }, style: { background: "#CCE5FF", border: "#007BFF", color: "#004085" } } },
-      { id: "Service:Payment Service", type: "customNode", position: { x: 400, y: 300 }, data: { label: "Payment Service", type: "Service", properties: { purpose: "Triggers Stripe charges", capability: "Commerce", risk_level: "High" }, style: { background: "#CCE5FF", border: "#007BFF", color: "#004085" } } },
-      { id: "Service:Notifications Service", type: "customNode", position: { x: 400, y: 450 }, data: { label: "Notifications Service", type: "Service", properties: { purpose: "Triggers dispatch alerts", capability: "Notifications" }, style: { background: "#CCE5FF", border: "#007BFF", color: "#004085" } } },
-      { id: "Repository:checkout-api", type: "customNode", position: { x: 700, y: 100 }, data: { label: "checkout-api", type: "Repository", properties: { language: "TypeScript", url: "git@github.com:org/checkout-api.git" }, style: { background: "#E8D9F2", border: "#9C27B0", color: "#4A0072" } } },
-      { id: "Repository:payment-gateway", type: "customNode", position: { x: 700, y: 250 }, data: { label: "payment-gateway", type: "Repository", properties: { language: "Python" }, style: { background: "#E8D9F2", border: "#9C27B0", color: "#4A0072" } } },
-      { id: "API:POST /api/v1/checkout", type: "customNode", position: { x: 700, y: 400 }, data: { label: "POST /api/v1/checkout", type: "API", properties: { method: "POST", path: "/api/v1/checkout" }, style: { background: "#D1ECF1", border: "#17A2B8", color: "#0C5460" } } },
-      { id: "Incident:INC-212", type: "customNode", position: { x: 400, y: -20 }, data: { label: "INC-212: Stripe Outage", type: "Incident", properties: { severity: "Critical", status: "Active", root_cause: "Stripe API timeouts" }, style: { background: "#FCE8E6", border: "#EA4335", color: "#C5221F" } } }
+      { id: "Team:Commerce Team", type: "customNode", position: { x: 50, y: 150 }, data: { label: "Commerce Team", type: "Team", properties: { description: "Manages checkouts and payments" }, style: { background: "#FFF3CD", border: "#FFC107", color: "#856404" } } },
+      { id: "Team:Notifications Team", type: "customNode", position: { x: 50, y: 350 }, data: { label: "Notifications Team", type: "Team", properties: { description: "Sends SMS and WhatsApp alerts" }, style: { background: "#FFF3CD", border: "#FFC107", color: "#856404" } } },
+      { id: "Engineer:Sarah Smith", type: "customNode", position: { x: 450, y: 150 }, data: { label: "Sarah Smith", type: "Engineer", properties: { role: "Lead Engineer", email: "sarah@company.com" }, style: { background: "#D4EDDA", border: "#28A745", color: "#155724" } } },
+      { id: "Service:Checkout Service", type: "customNode", position: { x: 900, y: 150 }, data: { label: "Checkout Service", type: "Service", properties: { purpose: "Handles customer checkout transactions", capability: "Commerce", risk_level: "High", failure_impact: "Revenue loss" }, style: { background: "#CCE5FF", border: "#007BFF", color: "#004085" } } },
+      { id: "Service:Payment Service", type: "customNode", position: { x: 900, y: 300 }, data: { label: "Payment Service", type: "Service", properties: { purpose: "Triggers Stripe charges", capability: "Commerce", risk_level: "High" }, style: { background: "#CCE5FF", border: "#007BFF", color: "#004085" } } },
+      { id: "Service:Notifications Service", type: "customNode", position: { x: 900, y: 450 }, data: { label: "Notifications Service", type: "Service", properties: { purpose: "Triggers dispatch alerts", capability: "Notifications" }, style: { background: "#CCE5FF", border: "#007BFF", color: "#004085" } } },
+      { id: "Repository:checkout-api", type: "customNode", position: { x: 1400, y: 150 }, data: { label: "checkout-api", type: "Repository", properties: { language: "TypeScript", url: "git@github.com:org/checkout-api.git" }, style: { background: "#E8D9F2", border: "#9C27B0", color: "#4A0072" } } },
+      { id: "Repository:payment-gateway", type: "customNode", position: { x: 1400, y: 300 }, data: { label: "payment-gateway", type: "Repository", properties: { language: "Python" }, style: { background: "#E8D9F2", border: "#9C27B0", color: "#4A0072" } } },
+      { id: "API:POST /api/v1/checkout", type: "customNode", position: { x: 1900, y: 150 }, data: { label: "POST /api/v1/checkout", type: "API", properties: { method: "POST", path: "/api/v1/checkout" }, style: { background: "#D1ECF1", border: "#17A2B8", color: "#0C5460" } } },
+      { id: "Incident:INC-212", type: "customNode", position: { x: 2900, y: 150 }, data: { label: "INC-212: Stripe Outage", type: "Incident", properties: { severity: "Critical", status: "Active", root_cause: "Stripe API timeouts" }, style: { background: "#FCE8E6", border: "#EA4335", color: "#C5221F" } } }
     ];
 
     const mockEdges: any[] = [
@@ -76,8 +107,9 @@ export default function GraphExplorer() {
       { id: "edge-10", source: "Incident:INC-212", target: "Service:Payment Service", label: "TRIGGERED_BY", animated: false }
     ];
 
-    setNodes(mockNodes);
-    setEdges(mockEdges);
+    setAllNodes(mockNodes);
+    setAllEdges(mockEdges);
+    applyCategoryFilter("architecture", mockNodes, mockEdges);
   };
 
   useEffect(() => {
@@ -87,12 +119,13 @@ export default function GraphExplorer() {
         const res = await fetch("/api/v1/graph/data");
         if (res.ok) {
           const data = await res.json();
-          if (data.nodes && data.nodes.length > 0) {
-            setNodes(data.nodes);
-            setEdges(data.edges);
-          } else {
-            loadFallbackGraph();
-          }
+          const n = data.nodes || [];
+          const e = data.edges || [];
+          setAllNodes(n);
+          setAllEdges(e);
+          const hasArchitecture = n.some((node: any) => ["Service", "Repository", "API"].includes(node.data?.type));
+          const initialFilter = hasArchitecture ? "architecture" : (n.length > 0 ? "all" : "architecture");
+          applyCategoryFilter(initialFilter, n, e);
         } else {
           loadFallbackGraph();
         }
@@ -104,7 +137,7 @@ export default function GraphExplorer() {
       }
     }
     fetchGraph();
-  }, [setNodes, setEdges]);
+  }, []);
 
   // Click handler on React Flow nodes
   const onNodeClick = useCallback((event: any, node: any) => {
@@ -230,28 +263,54 @@ export default function GraphExplorer() {
         ) : null}
 
         {/* Toolbar Overlay */}
-        <div className="absolute top-4 left-4 z-10 bg-slate-900 border border-slate-800 p-2.5 rounded-xl flex gap-3 shadow-xl">
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <input
-              type="text"
-              placeholder="Search graph..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="px-3 py-1.5 bg-slate-950 border border-slate-850 focus:border-indigo-500 rounded-lg text-xs text-slate-200 outline-none w-48"
-            />
-            <button type="submit" className="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white transition cursor-pointer">
-              <Search className="h-3.5 w-3.5" />
-            </button>
-          </form>
-          
-          {highlightMode !== "none" && (
-            <button 
-              onClick={resetHighlight} 
-              className="px-3 py-1 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-400 text-xs font-semibold rounded-lg transition cursor-pointer"
-            >
-              Reset Path
-            </button>
-          )}
+        <div className="absolute top-4 left-4 z-10 flex flex-wrap items-center gap-3">
+          <div className="bg-slate-900 border border-slate-800 p-2 rounded-xl flex gap-2 shadow-xl">
+            <form onSubmit={handleSearch} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Search graph..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="px-3 py-1.5 bg-slate-950 border border-slate-850 focus:border-indigo-500 rounded-lg text-xs text-slate-200 outline-none w-44"
+              />
+              <button type="submit" className="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white transition cursor-pointer">
+                <Search className="h-3.5 w-3.5" />
+              </button>
+            </form>
+            
+            {highlightMode !== "none" && (
+              <button 
+                onClick={resetHighlight} 
+                className="px-3 py-1 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-400 text-xs font-semibold rounded-lg transition cursor-pointer"
+              >
+                Reset Path
+              </button>
+            )}
+          </div>
+
+          {/* Category Filter Pills */}
+          <div className="bg-slate-900 border border-slate-800 p-1.5 rounded-xl flex items-center gap-1 shadow-xl">
+            {[
+              { id: "architecture", label: "Architecture" },
+              { id: "ownership", label: "Ownership" },
+              { id: "incidents", label: "Incidents" },
+              { id: "requirements", label: "Requirements" },
+              { id: "all", label: "Full Graph" }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => applyCategoryFilter(tab.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  activeFilter === tab.id
+                    ? "bg-indigo-600 text-white shadow"
+                    : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <ReactFlow
@@ -273,6 +332,46 @@ export default function GraphExplorer() {
             className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden hidden md:block" 
           />
         </ReactFlow>
+
+        {nodes.length === 0 && !loading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+            <div className="p-6 rounded-2xl bg-slate-900/90 border border-slate-800 text-center max-w-sm pointer-events-auto shadow-2xl">
+              {allNodes.length > 0 ? (
+                <>
+                  <p className="text-sm font-bold text-slate-200">No Nodes in &ldquo;{activeFilter}&rdquo; View</p>
+                  <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                    There are <strong>{allNodes.length} nodes</strong> in Neo4j, but none match this specific filter.
+                  </p>
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => applyCategoryFilter("all")}
+                      className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition cursor-pointer"
+                    >
+                      View All {allNodes.length} Nodes
+                    </button>
+                    {allNodes.some((n: any) => n.data?.type === "Incident") && (
+                      <button
+                        type="button"
+                        onClick={() => applyCategoryFilter("incidents")}
+                        className="px-3 py-1.5 rounded-lg bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/30 text-rose-300 text-xs font-semibold transition cursor-pointer"
+                      >
+                        View Incidents
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-bold text-slate-200">Knowledge Graph is Clean</p>
+                  <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                    0 nodes currently in Neo4j. Ingest your repository from the <strong>Repository Intake</strong> tab, or click <strong>Load Demo Data</strong> in the sidebar.
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Selected Node Details Drawer */}

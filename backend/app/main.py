@@ -17,6 +17,7 @@ from .graph import get_graph_driver
 from .vectorstore import get_vector_store
 from .agents import AgentOrchestrator
 from .data import seed_all_data
+from .data.seed_real import seed_real_architecture
 from .repository_ingestion import inspect_public_repository, MANIFEST_NAMES, DOC_SUFFIXES
 
 # Configure logging
@@ -55,7 +56,7 @@ def startup_event():
     try:
         driver = get_graph_driver()
         nodes = driver.get_nodes()
-        if not nodes:
+        if not nodes and settings.AUTO_SEED:
             logger.info("Graph database is empty. Auto-seeding initial data...")
             seed_all_data()
     except Exception as e:
@@ -68,6 +69,16 @@ def trigger_seed():
         return {"status": "success", "message": "Database seeded successfully."}
     except Exception as e:
         logger.error(f"Manual seed trigger failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/seed/real", tags=["Data"])
+def trigger_real_seed():
+    """Seed real architecture mapped to Pavan Kumar H's GitHub repositories and Freshservice incidents."""
+    try:
+        result = seed_real_architecture()
+        return result
+    except Exception as e:
+        logger.error(f"Real architecture seed trigger failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/stats", tags=["Dashboard"])
@@ -696,6 +707,67 @@ def search_experts(service: str):
         logger.error(f"Failed to search experts: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+from .connectors.freshservice import FreshserviceLiveClient
+
+freshservice_client = FreshserviceLiveClient()
+
+class DiagnoseTicketRequest(BaseModel):
+    ticket_id: int
+    post_note: bool = True
+
+@app.get("/api/v1/freshworks/status", tags=["Freshworks"])
+def freshworks_status():
+    """Check connectivity to Freshservice tenant."""
+    return freshservice_client.test_connection()
+
+@app.get("/api/v1/freshworks/tickets", tags=["Freshworks"])
+def freshworks_tickets():
+    """Fetch live tickets from Freshservice (without syncing to graph)."""
+    if not freshservice_client.is_configured:
+        return []
+    return freshservice_client.get_tickets(per_page=30)
+
+@app.post("/api/v1/freshworks/sync", tags=["Freshworks"])
+def freshworks_sync():
+    """Sync live incidents from Freshservice tenant into Neo4j."""
+    driver = get_graph_driver()
+    return freshservice_client.sync_tickets_to_graph(driver)
+
+@app.post("/api/v1/freshworks/diagnose", tags=["Freshworks"])
+def diagnose_freshservice_ticket(req: DiagnoseTicketRequest):
+    """Diagnose a live Freshservice ticket with AI and post resolution back."""
+    ticket = freshservice_client.get_ticket(req.ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found in Freshservice")
+    
+    subject = ticket.get("subject", "")
+    description = ticket.get("description_text", "")
+    query = f"Investigate {subject}. Details: {description}"
+    
+    agent = orchestrator.agents["incident_context"]
+    res = agent.run(query)
+    diagnosis = res.get("result", {})
+    
+    posted = False
+    if req.post_note and freshservice_client.is_configured:
+        note_html = f"""
+        <div style="font-family: Arial, sans-serif; border-left: 4px solid #4f46e5; padding-left: 12px;">
+            <p><strong>🤖 CodeAtlas AI Incident Diagnosis</strong></p>
+            <p><strong>Suspected Cause:</strong> {diagnosis.get('root_cause', 'Dependency Timeout / Error')}</p>
+            <p><strong>Impacted Services:</strong> {', '.join(diagnosis.get('dependencies', ['Unknown']))}</p>
+            <p><strong>Escalation Path:</strong> {diagnosis.get('escalation_path', 'Platform On-Call')}</p>
+            <small style="color: #64748b;">Diagnosed by CodeAtlas AI Living Ontology Platform</small>
+        </div>
+        """
+        posted = freshservice_client.add_note_to_ticket(req.ticket_id, note_html, private=True)
+    
+    return {
+        "ticket_id": req.ticket_id,
+        "subject": subject,
+        "diagnosis": diagnosis,
+        "posted_to_freshservice": posted
+    }
+
 @app.get("/api/v1/graph/data", tags=["Graph"])
 def get_graph_data():
     """Retrieve nodes and edges formatted for React Flow rendering."""
@@ -721,37 +793,33 @@ def get_graph_data():
             "Runbook": {"background": "#E2F0D9", "border": "#70AD47", "color": "#385623"}     # Light Green
         }
         
-        # Grid layout helper coordinates to prevent overlapping
+        # Grid layout coordinates: give each entity category its own distinct column
+        # with 450px horizontal separation to completely prevent overlapping cards
         category_x = {
-            "Team": 100,
-            "Engineer": 100,
-            "Service": 400,
-            "Repository": 700,
-            "API": 700,
-            "Requirement": 400,
-            "Incident": 400,
-            "Document": 950,
-            "Runbook": 950
+            "Team": 50,
+            "Engineer": 450,
+            "Service": 900,
+            "Repository": 1400,
+            "API": 1900,
+            "Requirement": 2400,
+            "Incident": 2900,
+            "Runbook": 3400,
+            "Document": 3900
         }
         
-        y_counters = {k: 50 for k in category_x.keys()}
+        y_counters = {k: 80 for k in category_x.keys()}
         
         for node in raw_nodes:
-            lbl = node["labels"][0]
-            properties = node["properties"]
+            lbl = node["labels"][0] if node.get("labels") else "Service"
+            properties = node.get("properties", {})
             
             # Primary naming extraction
             name = properties.get("name") or properties.get("title") or properties.get("req_id") or properties.get("inc_id") or "Unnamed Node"
             
             # Position allocation
-            x = category_x.get(lbl, 500)
-            if lbl == "Engineer":
-                x = 100
-                y = y_counters["Team"] + 50
-                y_counters["Team"] = y  # Stagger them
-            else:
-                y = y_counters.get(lbl, 100)
-                y_counters[lbl] = y + 120
+            x = category_x.get(lbl, 1000)
+            y = y_counters.get(lbl, 80)
+            y_counters[lbl] = y + 130  # 130px vertical separation
             
             style = color_map.get(lbl, {"background": "#FFFFFF", "border": "#CCCCCC", "color": "#333333"})
             
