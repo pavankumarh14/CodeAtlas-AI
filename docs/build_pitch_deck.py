@@ -95,9 +95,9 @@ s.background.fill.fore_color.rgb = BG
 box(s, Inches(0.7), Inches(2.35), Inches(0.12), Inches(2.1), fill=TEAL, line=None, shape=MSO_SHAPE.RECTANGLE)
 text(s, Inches(1.1), Inches(2.2), Inches(11), Inches(1.2), "CodeAtlas AI", size=60, bold=True)
 text(s, Inches(1.1), Inches(3.35), Inches(11), Inches(0.6), "The Living Engineering Ontology and Knowledge Graph Platform", size=24, color=INDIGO)
-text(s, Inches(1.1), Inches(4.0), Inches(11), Inches(0.5), "Every Freshservice incident, diagnosed before anyone opens it.", size=18, color=MUTED)
+text(s, Inches(1.1), Inches(4.0), Inches(11), Inches(0.5), "Every Freshservice incident and change, diagnosed and routed automatically.", size=18, color=MUTED)
 text(s, Inches(1.1), Inches(6.2), Inches(11), Inches(0.4), [[("Pavan Kumar H", {"bold": True, "color": WHITE}), ("   ·   The Great Agent Hackathon", {"color": MUTED})]], size=16)
-s.notes_slide.notes_text_frame.text = "Introduce yourself and the one-line pitch: CodeAtlas gives every Freshservice incident the engineering context it's missing, and posts it back automatically."
+s.notes_slide.notes_text_frame.text = "Introduce yourself and the one-line pitch: CodeAtlas diagnoses and routes every Freshservice incident and change before anyone opens it, with engineering context from the knowledge graph."
 
 # 2. Problem
 s = new_slide("A ticket says what broke. Nobody knows why.", "The problem",
