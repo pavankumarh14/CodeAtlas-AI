@@ -25,6 +25,36 @@ SERVICE_KEYWORDS = {
     "Funding Platform": ["funder", "funding", "investor pledge"]
 }
 
+# Freshservice support groups (by name suffix) and the ticket signals that route to them.
+# Order matters on ties: specific groups before the generic Software Team.
+GROUP_KEYWORDS = {
+    "Database Team": ["database", "db ", "sql", "postgres", "mysql", "mongo", "redis", "connection pool", "pool exhausted", "replica", "deadlock"],
+    "Network Team": ["network", "dns", "vpn", "firewall", "load balancer", "ssl", "tls", "certificate", "packet", "unreachable"],
+    "Hardware Team": ["laptop", "printer", "hardware", "keyboard", "monitor screen", "device", "disk failure"],
+    "Capacity Management Team": ["capacity", "cpu", "memory", "out of memory", "disk space", "scaling", "throttl", "quota", "rate limit"],
+    "Helpdesk Monitoring Team": ["monitoring", "alert", "telemetry", "health check", "dashboard", "on-call", "pager"],
+    "Software Team": ["deploy", "release", "config", "bug", "error", "exception", "api", "500", "crash", "regression", "service", "app"],
+}
+FALLBACK_GROUP = "Incident Team"
+
+
+def choose_group(text: str, groups: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Pick the Freshservice group whose signals best match the ticket; returns group, name and matched keywords."""
+    text = f" {text.lower()} "
+    by_label = {}
+    for g in groups:
+        for label in list(GROUP_KEYWORDS) + [FALLBACK_GROUP]:
+            if g.get("name", "").endswith(label):
+                by_label[label] = g
+    hits = {label: [kw.strip() for kw in kws if kw in text] for label, kws in GROUP_KEYWORDS.items() if label in by_label}
+    best = max(hits, key=lambda label: len(hits[label]), default=None)
+    if best and hits[best]:
+        return {"group": by_label[best], "name": best, "matched": hits[best]}
+    if FALLBACK_GROUP in by_label:
+        return {"group": by_label[FALLBACK_GROUP], "name": FALLBACK_GROUP, "matched": []}
+    return None
+
+
 STOPWORDS = {
     "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "is", "are", "was", "with", "my",
     "what", "whats", "wrong", "why", "how", "investigate", "details", "diagnose", "request", "this", "that", "it"
@@ -219,6 +249,39 @@ class FreshserviceLiveClient:
             if len(results) >= limit:
                 break
         return results[:limit]
+
+    def assign_ticket_group(self, ticket_id: int, group_id: int) -> bool:
+        if not self.is_configured:
+            return False
+        try:
+            res = requests.put(f"{self.base_url}/tickets/{ticket_id}", headers=self.headers,
+                               json={"group_id": group_id}, timeout=10)
+            if res.status_code == 200:
+                return True
+            logger.error(f"Failed to assign group on ticket #{ticket_id}: {res.status_code} {res.text[:200]}")
+        except Exception as e:
+            logger.error(f"Exception assigning group on ticket #{ticket_id}: {e}")
+        return False
+
+    def change_url(self, change_id: Any) -> str:
+        return f"https://{self.domain}/a/changes/{change_id}"
+
+    def get_change(self, change_id: int) -> Optional[Dict[str, Any]]:
+        data = self._get(f"changes/{change_id}")
+        return data.get("change") if data else None
+
+    def add_note_to_change(self, change_id: int, note_html: str) -> bool:
+        if not self.is_configured:
+            return False
+        try:
+            res = requests.post(f"{self.base_url}/changes/{change_id}/notes", headers=self.headers,
+                                json={"body": note_html}, timeout=10)
+            if res.status_code in (200, 201):
+                return True
+            logger.error(f"Failed to post note to Freshservice change #{change_id}: {res.status_code} {res.text[:200]}")
+        except Exception as e:
+            logger.error(f"Exception posting note to Freshservice change: {e}")
+        return False
 
     def add_note_to_ticket(self, ticket_id: int, note_html: str, private: bool = True) -> bool:
         """Post a diagnosis note or triage response back into the Freshservice ticket."""

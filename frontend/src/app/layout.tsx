@@ -29,6 +29,8 @@ const ICON_PATH_SVG = {
     '<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/>',
   Database:
     '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
+  Wifi:
+    '<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.94 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>',
 };
 
 function IconSVG({ iconName, className }: { iconName: keyof typeof ICON_PATH_SVG; className?: string }) {
@@ -56,6 +58,7 @@ const navItems: Array<{ name: string; href: string; icon: keyof typeof ICON_PATH
   { name: "Expert Finder", href: "/experts", icon: "Users" },
   { name: "Incident Room", href: "/incidents", icon: "AlertTriangle" },
   { name: "Knowledge Gaps", href: "/gaps", icon: "ShieldAlert" },
+  { name: "Freshservice Integration", href: "/freshservice", icon: "Wifi" },
   { name: "Agent Activity Log", href: "/logs", icon: "History" },
 ];
 

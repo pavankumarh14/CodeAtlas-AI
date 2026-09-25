@@ -132,6 +132,7 @@ export default function HomeDashboard() {
   const [diagnosingId, setDiagnosingId] = useState<number | null>(null);
   const [diagnosisResults, setDiagnosisResults] = useState<Record<number, DiagnosisResult>>({});
   const [collapsedDiagnosis, setCollapsedDiagnosis] = useState<Set<number>>(new Set());
+  const [agentTrace, setAgentTrace] = useState<Record<number, Array<{step: string; agent?: string; status: string; timestamp: string}>>>({});
 
   const fetchFreshserviceStatus = useCallback(async () => {
     try {
@@ -209,6 +210,13 @@ export default function HomeDashboard() {
 
   const diagnoseTicket = async (ticketId: number) => {
     setDiagnosingId(ticketId);
+    setAgentTrace((prev) => ({
+      ...prev,
+      [ticketId]: [
+        { step: "Starting diagnosis...", status: "in_progress", timestamp: new Date().toLocaleTimeString() }
+      ]
+    }));
+
     try {
       const res = await fetch("/api/v1/freshworks/diagnose", {
         method: "POST",
@@ -218,9 +226,31 @@ export default function HomeDashboard() {
       if (res.ok) {
         const data: DiagnosisResult = await res.json();
         setDiagnosisResults((prev) => ({ ...prev, [ticketId]: data }));
+        setAgentTrace((prev) => ({
+          ...prev,
+          [ticketId]: [
+            ...(prev[ticketId] || []),
+            { step: "Diagnosis complete", status: "complete", timestamp: new Date().toLocaleTimeString() }
+          ]
+        }));
+      } else {
+        setAgentTrace((prev) => ({
+          ...prev,
+          [ticketId]: [
+            ...(prev[ticketId] || []),
+            { step: "Diagnosis failed", status: "error", timestamp: new Date().toLocaleTimeString() }
+          ]
+        }));
       }
     } catch (e) {
       console.error("Diagnosis failed", e);
+      setAgentTrace((prev) => ({
+        ...prev,
+        [ticketId]: [
+          ...(prev[ticketId] || []),
+          { step: `Error: ${String(e)}`, status: "error", timestamp: new Date().toLocaleTimeString() }
+        ]
+      }));
     } finally {
       setDiagnosingId(null);
     }
@@ -563,6 +593,31 @@ export default function HomeDashboard() {
                         </button>
                       </div>
                     </div>
+
+                    {/* Agent Trace Panel (while diagnosing) */}
+                    {diagnosingId === ticket.id && agentTrace[ticket.id] && (
+                      <div className="mt-3 p-3 bg-slate-950/60 border border-indigo-500/20 rounded-lg space-y-2 animate-fadeIn">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Agent Execution Trace
+                        </p>
+                        <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                          {agentTrace[ticket.id].map((trace, idx) => (
+                            <div key={idx} className="text-[10px] text-slate-400 flex items-start gap-2">
+                              <span className="mt-0.5 inline-block">
+                                {trace.status === "in_progress" && <Loader2 className="h-2 w-2 animate-spin text-amber-400" />}
+                                {trace.status === "complete" && <CheckCircle2 className="h-2 w-2 text-emerald-400" />}
+                                {trace.status === "error" && <XCircle className="h-2 w-2 text-rose-400" />}
+                              </span>
+                              <div className="flex-1">
+                                <span className="text-slate-300">{trace.step}</span>
+                                <span className="text-slate-600 ml-2">{trace.timestamp}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Inline Diagnosis Result */}
                     {diagnosis && (
