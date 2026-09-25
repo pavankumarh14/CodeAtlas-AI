@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Body, Request
+from fastapi import FastAPI, HTTPException, Body, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -6,6 +6,8 @@ from typing import List, Dict, Any, Optional
 import logging
 import uuid
 import datetime
+import hmac
+import html
 import os
 import zipfile
 import io
@@ -711,9 +713,82 @@ from .connectors.freshservice import FreshserviceLiveClient
 
 freshservice_client = FreshserviceLiveClient()
 
+NOTE_MARKER = "CodeAtlas AI Incident Diagnosis"
+
 class DiagnoseTicketRequest(BaseModel):
     ticket_id: int
     post_note: bool = True
+
+class FreshserviceWebhookPayload(BaseModel):
+    # Workflow Automator placeholders render as strings, e.g. {"ticket_id": "{{ticket.id_numeric}}"}
+    ticket_id: str
+
+def _as_text_list(items: Any) -> List[str]:
+    """LLM output may return strings or objects; flatten to display strings."""
+    out = []
+    for item in items or []:
+        if isinstance(item, dict):
+            out.append(str(item.get("name") or item.get("title") or item.get("id") or item))
+        else:
+            out.append(str(item))
+    return out
+
+def _build_diagnosis_note(diagnosis: Dict[str, Any]) -> str:
+    esc = html.escape
+    related = "".join(
+        f"<li>{esc(str(r.get('title') or r.get('id')))}</li>"
+        for r in diagnosis.get("related_incidents", [])[:3] if isinstance(r, dict)
+    )
+    fixes = "".join(f"<li>{esc(f)}</li>" for f in _as_text_list(diagnosis.get("known_fixes"))[:5])
+    kb = "".join(
+        f"<li><a href=\"{esc(a['url'])}\">{esc(a['title'])}</a></li>"
+        for a in diagnosis.get("knowledge_base_articles", [])
+    )
+    deps = esc(", ".join(_as_text_list(diagnosis.get("dependencies"))) or "None mapped")
+    return f"""
+    <div style="font-family: Arial, sans-serif; border-left: 4px solid #4f46e5; padding-left: 12px;">
+        <p><strong>🤖 {NOTE_MARKER}</strong></p>
+        <p><strong>Suspected Cause:</strong> {esc(str(diagnosis.get('suspected_cause') or 'Not determined'))}</p>
+        <p><strong>Upstream Dependencies:</strong> {deps}</p>
+        {f'<p><strong>Related Incidents:</strong></p><ul>{related}</ul>' if related else ''}
+        {f'<p><strong>Recommended Fixes:</strong></p><ul>{fixes}</ul>' if fixes else ''}
+        {f'<p><strong>Knowledge Base:</strong></p><ul>{kb}</ul>' if kb else ''}
+        <p><strong>Escalation Path:</strong> {esc(str(diagnosis.get('escalation_path') or 'Platform On-Call'))}</p>
+        <small style="color: #64748b;">Diagnosed by CodeAtlas AI Living Ontology Platform</small>
+    </div>
+    """
+
+def _diagnose_ticket(ticket: Dict[str, Any], post_note: bool, source: str) -> Dict[str, Any]:
+    """Link a ticket into the ontology, run the Incident Context agent, and optionally post the note back."""
+    start_time = datetime.datetime.now()
+    ticket_id = ticket["id"]
+    subject = ticket.get("subject", "")
+    description = ticket.get("description_text", "")
+
+    inc_id = freshservice_client.upsert_ticket(ticket, get_graph_driver(), get_vector_store())
+
+    agent = orchestrator.agents["incident_context"]
+    res = agent.run(f"Investigate {subject}. Details: {description}", context={"exclude_incident_ids": [inc_id]})
+    diagnosis = res.get("result", {})
+
+    posted = False
+    if post_note and freshservice_client.is_configured:
+        posted = freshservice_client.add_note_to_ticket(ticket_id, _build_diagnosis_note(diagnosis), private=True)
+
+    activity_log.insert(0, {
+        "id": str(uuid.uuid4()), "timestamp": start_time.isoformat(),
+        "query": f"Diagnosed Freshservice ticket {inc_id}: {subject}", "flow_type": source,
+        "target_agent": agent.name,
+        "duration_ms": int((datetime.datetime.now() - start_time).total_seconds() * 1000),
+        "status": "Success"
+    })
+    return {
+        "ticket_id": ticket_id,
+        "subject": subject,
+        "diagnosis": diagnosis,
+        "trace": res.get("trace", []),
+        "posted_to_freshservice": posted
+    }
 
 @app.get("/api/v1/freshworks/status", tags=["Freshworks"])
 def freshworks_status():
@@ -729,9 +804,8 @@ def freshworks_tickets():
 
 @app.post("/api/v1/freshworks/sync", tags=["Freshworks"])
 def freshworks_sync():
-    """Sync live incidents from Freshservice tenant into Neo4j."""
-    driver = get_graph_driver()
-    return freshservice_client.sync_tickets_to_graph(driver)
+    """Sync live groups and tickets from the Freshservice tenant into the graph and vector index."""
+    return freshservice_client.sync_tickets_to_graph(get_graph_driver(), get_vector_store())
 
 @app.post("/api/v1/freshworks/diagnose", tags=["Freshworks"])
 def diagnose_freshservice_ticket(req: DiagnoseTicketRequest):
@@ -739,34 +813,29 @@ def diagnose_freshservice_ticket(req: DiagnoseTicketRequest):
     ticket = freshservice_client.get_ticket(req.ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found in Freshservice")
-    
-    subject = ticket.get("subject", "")
-    description = ticket.get("description_text", "")
-    query = f"Investigate {subject}. Details: {description}"
-    
-    agent = orchestrator.agents["incident_context"]
-    res = agent.run(query)
-    diagnosis = res.get("result", {})
-    
-    posted = False
-    if req.post_note and freshservice_client.is_configured:
-        note_html = f"""
-        <div style="font-family: Arial, sans-serif; border-left: 4px solid #4f46e5; padding-left: 12px;">
-            <p><strong>🤖 CodeAtlas AI Incident Diagnosis</strong></p>
-            <p><strong>Suspected Cause:</strong> {diagnosis.get('root_cause', 'Dependency Timeout / Error')}</p>
-            <p><strong>Impacted Services:</strong> {', '.join(diagnosis.get('dependencies', ['Unknown']))}</p>
-            <p><strong>Escalation Path:</strong> {diagnosis.get('escalation_path', 'Platform On-Call')}</p>
-            <small style="color: #64748b;">Diagnosed by CodeAtlas AI Living Ontology Platform</small>
-        </div>
-        """
-        posted = freshservice_client.add_note_to_ticket(req.ticket_id, note_html, private=True)
-    
-    return {
-        "ticket_id": req.ticket_id,
-        "subject": subject,
-        "diagnosis": diagnosis,
-        "posted_to_freshservice": posted
-    }
+    return _diagnose_ticket(ticket, req.post_note, "freshservice_diagnose")
+
+@app.post("/api/v1/freshworks/webhook", tags=["Freshworks"])
+def freshservice_webhook(payload: FreshserviceWebhookPayload, x_codeatlas_secret: Optional[str] = Header(default=None)):
+    """Target for a Freshservice Workflow Automator 'Trigger Webhook' action on ticket creation.
+
+    Auto-diagnoses the ticket and posts a private note. Tickets that already carry a
+    CodeAtlas note are skipped so a 'ticket updated' workflow cannot loop on our own note.
+    """
+    secret = settings.FRESHSERVICE_WEBHOOK_SECRET
+    if secret and not hmac.compare_digest(x_codeatlas_secret or "", secret):
+        raise HTTPException(status_code=401, detail="Invalid webhook secret")
+    try:
+        ticket_id = int(payload.ticket_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="ticket_id must be numeric; use {{ticket.id_numeric}}")
+
+    ticket = freshservice_client.get_ticket(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found in Freshservice")
+    if any(NOTE_MARKER in (c.get("body") or "") for c in freshservice_client.get_conversations(ticket_id)):
+        return {"ticket_id": ticket_id, "skipped": True, "reason": "Ticket already diagnosed by CodeAtlas AI"}
+    return _diagnose_ticket(ticket, True, "freshservice_webhook")
 
 @app.get("/api/v1/graph/data", tags=["Graph"])
 def get_graph_data():

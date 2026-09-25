@@ -138,6 +138,36 @@ This spins up:
 
 ---
 
+## 🎫 Freshservice Integration
+
+CodeAtlas uses the Freshservice REST v2 API to read tickets and the knowledge base, and to post diagnoses back. It works across the platform:
+
+| Where | What it does |
+| --- | --- |
+| **Dashboard → Freshservice Integration** | Tests the connection, lists live tickets, and **Sync Tickets to Graph**. |
+| **Sync** (`POST /api/v1/freshworks/sync`) | Imports support groups as `Team` nodes and tickets as `Incident` nodes (`FS-<id>`). Each ticket is linked `IMPACTS → Service` when its text matches a known service and `ESCALATED_TO → Team` when it has a group, and is indexed in the vector store. |
+| **Incident Context Agent** (Incident Room, Analyzer) | Searches live tickets and Freshservice Solutions (KB) articles through the Freshservice MCP adapter and cites them in the diagnosis. |
+| **AI Diagnose** (`POST /api/v1/freshworks/diagnose`) | Diagnoses one ticket and posts a private note with suspected cause, related incidents, fixes, KB articles and escalation path. |
+| **Webhook** (`POST /api/v1/freshworks/webhook`) | The same diagnosis, triggered automatically by Freshservice Workflow Automator. |
+
+Setup: set `FRESHSERVICE_DOMAIN`, `FRESHSERVICE_API_KEY` and (optionally) `FRESHSERVICE_WORKSPACE_ID` in `.env` and restart the backend. Without an API key the agents fall back to the mocked Freshservice connector.
+
+### Auto-diagnose new tickets with Workflow Automator
+
+1. Expose the backend publicly. Freshservice cannot reach `localhost`, so use the Render URL or a tunnel such as `ngrok http 8000`.
+2. In Freshservice go to **Admin → Automation & Productivity → Workflow Automator → Create → Workflow**, module **Ticket**, **Event Based**.
+3. Event: **Ticket is Raised**. Optionally add a condition, e.g. **Type is Incident**.
+4. Action: **Trigger Webhook**. Method `POST`, URL `https://<your-host>/api/v1/freshworks/webhook`, encoding JSON, content:
+   ```json
+   { "ticket_id": "{{ticket.id_numeric}}" }
+   ```
+   If `FRESHSERVICE_WEBHOOK_SECRET` is set, add a custom header `X-CodeAtlas-Secret: <secret>`.
+5. **Activate**. Check runs under **Workflow Automator → Execution Logs**.
+
+Tickets that already have a CodeAtlas note are skipped, so an update-triggered workflow cannot loop on its own note.
+
+---
+
 ## 📊 Demo Scenarios to Try
 
 1. **Seed the database**: Click **Reset & Seed DB** in the bottom-left sidebar of the frontend. This clears databases and populates exactly 20 services, 25 engineers, 5 teams, 50 requirements, 30 incidents, and 100+ dependency relationships.

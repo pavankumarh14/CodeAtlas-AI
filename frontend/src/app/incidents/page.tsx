@@ -192,7 +192,13 @@ export default function IncidentRoom() {
               {troubleshootResult.related_incidents?.map((inc: any, idx: number) => (
                 <div key={idx} className="p-4 bg-slate-950 border border-slate-850 rounded-xl">
                   <div className="flex items-start justify-between gap-2">
-                    <span className="text-xs font-semibold text-slate-200">{inc.title}</span>
+                    {inc.url ? (
+                      <a href={inc.url} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-slate-200 hover:text-teal-300 underline decoration-slate-700">
+                        {inc.title}
+                      </a>
+                    ) : (
+                      <span className="text-xs font-semibold text-slate-200">{inc.title}</span>
+                    )}
                     <span className="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] font-mono text-slate-400 font-bold uppercase shrink-0">
                       {inc.id}
                     </span>
@@ -233,6 +239,20 @@ export default function IncidentRoom() {
                   ))}
                 </ul>
               </div>
+
+              {troubleshootResult.knowledge_base_articles?.length > 0 && (
+                <div>
+                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Freshservice Knowledge Base</span>
+                  <ul className="space-y-2 mt-2">
+                    {troubleshootResult.knowledge_base_articles.map((article: any) => (
+                      <li key={article.url} className="text-xs bg-slate-950 p-3 rounded-lg border border-slate-850">
+                        <a href={article.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-teal-400 hover:text-teal-300">{article.title}</a>
+                        {article.summary && <p className="text-slate-500 mt-1 line-clamp-2">{article.summary}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               <div className="p-3 bg-slate-950 border border-slate-850 rounded-lg">
                 <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">On-Call Escalation Matrix</span>

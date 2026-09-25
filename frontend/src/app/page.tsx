@@ -91,8 +91,10 @@ interface DiagnosisResult {
   ticket_id: number;
   subject: string;
   diagnosis: {
-    root_cause?: string;
+    suspected_cause?: string;
     dependencies?: string[];
+    known_fixes?: string[];
+    knowledge_base_articles?: { title: string; url: string }[];
     escalation_path?: string;
   };
   posted_to_freshservice: boolean;
@@ -531,7 +533,7 @@ export default function HomeDashboard() {
                       </span>
                       <div className="flex items-center gap-1.5">
                         <a
-                          href={`https://freshworks065.freshservice.com/helpdesk/tickets/${ticket.id}`}
+                          href={`https://${fsStatus?.domain || "freshworks065.freshservice.com"}/helpdesk/tickets/${ticket.id}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-1.5 rounded-md hover:bg-slate-800 text-slate-500 hover:text-teal-400 transition"
@@ -562,13 +564,29 @@ export default function HomeDashboard() {
                           <BrainCircuit className="h-3 w-3" /> AI Diagnosis
                         </p>
                         <p className="text-xs text-slate-300">
-                          <span className="text-slate-500">Cause:</span> {diagnosis.diagnosis.root_cause || "Unknown"}
+                          <span className="text-slate-500">Cause:</span> {diagnosis.diagnosis.suspected_cause || "Unknown"}
                         </p>
                         {diagnosis.diagnosis.dependencies && diagnosis.diagnosis.dependencies.length > 0 && (
                           <p className="text-xs text-slate-300">
                             <span className="text-slate-500">Impacted:</span> {diagnosis.diagnosis.dependencies.join(", ")}
                           </p>
                         )}
+                        {diagnosis.diagnosis.known_fixes && diagnosis.diagnosis.known_fixes.length > 0 && (
+                          <p className="text-xs text-slate-300">
+                            <span className="text-slate-500">Fix:</span> {diagnosis.diagnosis.known_fixes[0]}
+                          </p>
+                        )}
+                        {diagnosis.diagnosis.knowledge_base_articles?.map((article) => (
+                          <a
+                            key={article.url}
+                            href={article.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-teal-400 hover:text-teal-300 flex items-center gap-1"
+                          >
+                            KB: {article.title} <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ))}
                         <p className="text-xs text-slate-300">
                           <span className="text-slate-500">Escalation:</span> {diagnosis.diagnosis.escalation_path || "On-Call"}
                         </p>

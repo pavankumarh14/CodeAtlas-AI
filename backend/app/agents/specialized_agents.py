@@ -2,6 +2,7 @@ import json
 import re
 from typing import Dict, Any, List, Optional
 from .base import BaseAgent
+from ..connectors.freshservice import match_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -485,26 +486,59 @@ class IncidentContextAgent(BaseAgent):
     def run(self, query: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         trace = ["Initializing Incident Context Agent...", "Searching vector store for historical incident descriptions..."]
         
+        # The ticket being diagnosed should not be reported as its own related incident
+        exclude_ids = set((context or {}).get("exclude_incident_ids", []))
+
         # Search vector store
-        inc_matches = self.vector_store.similarity_search(query, k=3)
-        
-        # Query graph for active incidents
-        trace.append("Checking Graph database for active Incidents affecting components...")
-        incidents = self.graph.get_nodes("Incident")
-        
+        inc_matches = self.vector_store.similarity_search(query, k=5)
+
         related_incidents = []
         nodes_traversed = []
         for match in inc_matches:
+            inc_id = match["metadata"].get("id") or match["id"]
+            if inc_id in exclude_ids or match["score"] < 0.15:
+                continue
             if match["metadata"].get("type") == "Incident" or "INC-" in match["id"]:
                 related_incidents.append({
-                    "id": match["id"],
-                    "title": match["text"],
-                    "score": match["score"]
+                    "id": inc_id,
+                    "title": match["text"][:160],
+                    "score": match["score"],
+                    "url": match["metadata"].get("url")
                 })
-                nodes_traversed.append(f"Incident:{match['id']}")
-                
-        # If empty, add mock
-        if not related_incidents:
+                nodes_traversed.append(f"Incident:{inc_id}")
+
+        # Live ITSM lookup through the Freshservice MCP adapter
+        freshservice = self.mcp_adapters["freshservice"]
+        is_live = freshservice.metadata().get("mode") == "live"
+        trace.append(f"Searching Freshservice MCP adapter ({'live tenant' if is_live else 'mock'}) for matching tickets...")
+        fs_tickets = [t for t in freshservice.search(query) if t["id"] not in exclude_ids]
+        seen_ids = {r["id"] for r in related_incidents} | exclude_ids
+        for t in fs_tickets:
+            if t["id"] in seen_ids:
+                continue
+            seen_ids.add(t["id"])
+            related_incidents.append({
+                "id": t["id"],
+                "title": f"{t['id']}: {t.get('subject')} ({t.get('state')})",
+                "score": t.get("score", 0.5),
+                "url": t.get("url")
+            })
+            nodes_traversed.append(f"Incident:{t['id']}")
+        trace.append(f"Freshservice returned {len(fs_tickets)} matching tickets.")
+
+        # Query graph for incidents already linked to the ontology
+        trace.append("Checking Graph database for Incidents affecting components...")
+        query_lower = query.lower()
+        for inc in self.graph.get_nodes("Incident"):
+            props = inc["properties"]
+            inc_id = props.get("inc_id", "")
+            if inc_id and inc_id not in seen_ids and inc_id.lower() in query_lower:
+                seen_ids.add(inc_id)
+                related_incidents.append({"id": inc_id, "title": props.get("title", inc_id), "score": 1.0, "url": props.get("url")})
+                nodes_traversed.append(f"Incident:{inc_id}")
+
+        # If empty, add mock (demo mode only; never invent incidents for a live tenant)
+        if not related_incidents and not is_live:
             related_incidents = [
                 {"id": "INC-101", "title": "Checkout latency spikes caused by database lockups", "score": 0.85},
                 {"id": "INC-212", "title": "Stripe Gateway Timeout during checkout flow", "score": 0.65}
@@ -515,14 +549,10 @@ class IncidentContextAgent(BaseAgent):
 
         # Find dependencies of Checkout Service
         trace.append("Querying service dependencies to check for upstream failures...")
-        services = self.graph.get_nodes("Service")
-        target_service = "Checkout Service"
-        for s in services:
-            sname = s["properties"].get("name", "")
-            if sname.lower() in query.lower():
-                target_service = sname
-                break
-                
+        service_names = [s["properties"].get("name", "") for s in self.graph.get_nodes("Service")]
+        matched_service = match_service(query, [n for n in service_names if n])
+        target_service = matched_service or "Checkout Service"
+
         deps = self.graph.get_dependency_chain(target_service, "upstream")
         dep_names = []
         for path in deps:
@@ -531,22 +561,25 @@ class IncidentContextAgent(BaseAgent):
                 if node["name"] != target_service:
                     dep_names.append(node["name"])
         dep_names = list(set(dep_names))
-        if not dep_names:
+        # Placeholder dependencies only for the unmatched demo default, not for a service resolved from the graph
+        if not dep_names and not matched_service:
             dep_names = ["Payment Service", "Inventory Service"]
             nodes_traversed.extend(["Service:Payment Service", "Service:Inventory Service"])
 
         # Runbook lookups
+        trace.append("Searching Freshservice knowledge base for matching solution articles...")
+        kb_articles = freshservice.search_articles(query)
+        trace.append(f"Freshservice knowledge base returned {len(kb_articles)} articles.")
+
         trace.append("Searching Confluence MCP adapter for matching recovery runbooks...")
         runbooks = self.mcp_adapters["confluence"].search("runbook")
-        
-        documents_consulted = [
-            f"Runbook: Confluence Page CONF-902 (Checkout Latency mitigation)"
-        ]
+
+        documents_consulted = [f"Freshservice KB: {a['title']}" for a in kb_articles]
         if runbooks:
             documents_consulted.append(f"Confluence: {runbooks[0].get('title')}")
 
         explainability = {
-            "why_chosen": f"Looked up historical database failures correlating to '{query}'. Traced dependency trees for impacted downstream service: '{target_service}'.",
+            "why_chosen": f"Matched '{query}' against Freshservice tickets, historical incidents and knowledge base articles. Traced dependency trees for impacted service: '{target_service}'.",
             "nodes_traversed": list(set(nodes_traversed))[:8],
             "documents_consulted": documents_consulted,
             "similar_requirements": [],
@@ -559,15 +592,24 @@ class IncidentContextAgent(BaseAgent):
             system_prompt = """You are an Incident Context Agent. Help troubleshoot engineering incidents.
             Format your response as JSON matching this schema:
             {
+              "suspected_cause": "string",
               "related_incidents": [{"id": "string", "title": "string", "relevance": "string"}],
               "dependencies": ["string"],
               "known_fixes": ["string"],
               "escalation_path": "string"
             }"""
-            db_context = f"Incident query: {query}\nRelated: {related_incidents}\nDeps: {dep_names}\nRunbooks: {runbooks}"
+            db_context = (
+                f"Incident query: {query}\nLikely affected service: {target_service}\nRelated: {related_incidents}\n"
+                f"Deps: {dep_names}\nFreshservice KB articles: {kb_articles}\nRunbooks: {runbooks}"
+            )
             llm_res = self.call_llm(system_prompt, db_context)
             try:
                 result = self.parse_llm_json(llm_res)
+                result["knowledge_base_articles"] = kb_articles
+                urls = {r["id"]: r.get("url") for r in related_incidents}
+                for inc in result.get("related_incidents", []):
+                    if isinstance(inc, dict) and urls.get(inc.get("id")):
+                        inc["url"] = urls[inc["id"]]
                 trace.append("LLM reasoning completed.")
                 return {
                     "agent_name": self.name,
@@ -580,8 +622,12 @@ class IncidentContextAgent(BaseAgent):
                 trace.append("Failed to parse LLM JSON. Falling back to dynamic rule-based synthesis.")
 
         result = {
+            "suspected_cause": (
+                f"Failure in {target_service} or its upstream dependencies ({', '.join(dep_names[:3])})" if dep_names
+                else f"Failure within {target_service} (no upstream dependencies mapped in the ontology)"
+            ),
             "related_incidents": [
-                {"id": r["id"], "title": r["title"], "relevance": "High Similarity"}
+                {"id": r["id"], "title": r["title"], "relevance": "High Similarity", "url": r.get("url")}
                 for r in related_incidents
             ],
             "dependencies": dep_names,
@@ -589,7 +635,8 @@ class IncidentContextAgent(BaseAgent):
                 f"Verify active connection pool and telemetry socket buffers in {target_service}",
                 f"Inspect dependency health checks ({', '.join(dep_names[:2]) if dep_names else 'monitoring infra'})",
                 "Restart worker pods to clear stale connection backlog"
-            ],
+            ] + [f"Follow Freshservice KB article: {a['title']}" for a in kb_articles],
+            "knowledge_base_articles": kb_articles,
             "escalation_path": f"Level 1: On-Call Team -> Level 2: {target_service} SME -> Level 3: Principal Architect (Pavan Kumar H)"
         }
         trace.append("Troubleshooting response compiled.")

@@ -26,6 +26,8 @@ class Settings:
     FRESHSERVICE_DOMAIN: str = os.getenv("FRESHSERVICE_DOMAIN", "freshworks065.freshservice.com")
     FRESHSERVICE_API_KEY: str = os.getenv("FRESHSERVICE_API_KEY", "")
     FRESHSERVICE_WORKSPACE_ID: str = os.getenv("FRESHSERVICE_WORKSPACE_ID", "")
+    # Shared secret the Workflow Automator webhook must send in the X-CodeAtlas-Secret header
+    FRESHSERVICE_WEBHOOK_SECRET: str = os.getenv("FRESHSERVICE_WEBHOOK_SECRET", "")
     
     # Fallback configuration
     FORCE_FALLBACK: bool = os.getenv("FORCE_FALLBACK", "false").lower() in ("true", "1", "yes")
