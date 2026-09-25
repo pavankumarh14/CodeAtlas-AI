@@ -96,8 +96,8 @@ class AgentOrchestrator:
             return "document_qa"
         return "ontology_mentor"
 
-    def execute(self, query: str) -> Dict[str, Any]:
-        flow = self._determine_flow(query)
+    def execute(self, query: str, flow: Optional[str] = None) -> Dict[str, Any]:
+        flow = flow or self._determine_flow(query)
         execution_trace = []
         start_time = time.time()
         

@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ps -p 58660 -o command=)",
+      "Bash(./venv/bin/python -c \"import app.main\")",
+      "Bash(curl -s -m 5 -o /dev/null -w \"%{http_code}\\\\n\" localhost:8000/api/v1/stats)",
+      "Bash(lsof -iTCP:8000 -sTCP:LISTEN)",
+      "Bash(grep -i -E \"LLM|gemini|error|Traceback\" /tmp/codeatlas-uvicorn.log | tail -8 | cut -c1-400; sed -n 1,96p /Users/pavankumarh/Documents/CodeAtlas-AI/backend/app/vectorstore/in_memory_driver.py | grep -n \"score\\\\|def \" )",
+      "Read(//private/tmp/**)",
+      "Bash(npm run *)",
+      "Bash(curl -s localhost:8000/incidents/)",
+      "Bash(git rm *)",
+      "Bash(git add *)",
+      "Bash(git check-ignore *)",
+      "Bash(git checkout *)",
+      "Bash(git commit *)",
+      "Read(//Applications/**)",
+      "Bash(python3 -m venv /tmp/pptx-venv)",
+      "Bash(/tmp/pptx-venv/bin/pip install *)",
+      "Bash(/tmp/pptx-venv/bin/python -c \"import pptx; print\\(pptx.__version__\\)\")"
+    ]
+  }
+}

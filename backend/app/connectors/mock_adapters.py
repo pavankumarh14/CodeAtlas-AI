@@ -222,6 +222,9 @@ class FreshserviceMCPAdapter(BaseMCPAdapter):
         ]
         return [item for item in mock_data if query.lower() in item["subject"].lower() or query.lower() in item["id"].lower()]
 
+    def search_articles(self, query: str) -> List[Dict[str, Any]]:
+        return []
+
     def fetch(self, item_id: str) -> Dict[str, Any]:
         is_101 = item_id == "INC-101"
         return {

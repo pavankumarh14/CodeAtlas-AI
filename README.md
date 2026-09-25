@@ -56,11 +56,13 @@
 │   │   ├── experts/page.tsx  # SME Finder
 │   │   ├── incidents/page.tsx# Incident diagnosis room
 │   │   ├── gaps/page.tsx     # Code compliance audit center
+│   │   ├── freshservice/page.tsx # Freshservice sync, AI diagnosis + live agent trace
 │   │   ├── logs/page.tsx     # Agent activity ledger
 │   │   ├── globals.css       # Global styles
 │   │   └── layout.tsx        # Sidebar shells
 │   ├── Dockerfile
 │   └── package.json
+├── docs/                     # Architecture diagrams, pitch deck, business case
 ├── docker-compose.yml        # Orchestration profile
 ├── .env                      # Local environment configuration
 └── README.md                 # Documentation
@@ -138,6 +140,66 @@ This spins up:
 
 ---
 
+## 🎫 Freshservice Integration
+
+CodeAtlas uses the Freshservice REST v2 API to read tickets, changes, groups and the knowledge base, and to write diagnoses, change-impact notes and group assignments back. Freshservice knows *what broke, who reported it and who is on call*; CodeAtlas adds *how the system is wired, what changed recently and who wrote the code*.
+
+Architecture and sequence diagrams: [docs/architecture.md](docs/architecture.md).
+
+| Where | What it does |
+| --- | --- |
+| **Freshservice Integration page** (`/freshservice`) | Tests the connection, **Sync Tickets to Graph**, lists synced tickets and runs **AI Diagnose** (brain icon) with a live agent trace, routing result and note status. |
+| **Sync** (`POST /api/v1/freshworks/sync`) | Imports support groups as `Team` nodes and tickets as `Incident` nodes (`FS-<id>`). Each ticket is linked `IMPACTS → Service` when its text matches a known service and `ESCALATED_TO → Team` when it has a group, and is indexed in the vector store. |
+| **Incident Context Agent** (Incident Room, Analyzer) | Searches live tickets and Freshservice Solutions (KB) articles, plus recent GitHub releases, commits and config diffs (secrets redacted) for the matched service's repositories, and cites them in the diagnosis. |
+| **AI Diagnose** (`POST /api/v1/freshworks/diagnose`) | Diagnoses one ticket, **auto-routes** it to the best-matching Freshservice group, and posts a private note with affected service, suspected cause, recent changes, related incidents, fixes, KB articles, routing reason and escalation path. |
+| **Webhook** (`POST /api/v1/freshworks/webhook`) | The same diagnosis, triggered by a Workflow Automator *Trigger Webhook* action. Skips tickets that already carry a CodeAtlas note. |
+| **Change impact** (`POST /api/v1/freshworks/changes/analyze`) | Runs the multi-agent pipeline (Requirement Impact → Ontology Mentor → Expert Discovery) on a Freshservice Change, adds the downstream **blast radius** from the graph, and posts affected services, repositories, APIs, risk, recommended steps and suggested CAB reviewers as a note on the change. |
+
+All endpoints accept numeric IDs or Freshservice display IDs (`"INC-103"`, `"CHN-6"`), so Workflow Automator placeholders can be used as-is.
+
+Setup: set `FRESHSERVICE_DOMAIN`, `FRESHSERVICE_API_KEY` and (optionally) `FRESHSERVICE_WORKSPACE_ID`, `GITHUB_TOKEN` and `GITHUB_CHANGE_WINDOW_DAYS` in `.env` and restart the backend. Without an API key the agents fall back to the mocked Freshservice connector.
+
+### Auto-routing
+
+During diagnosis CodeAtlas picks a Freshservice group from the ticket text and the affected service (e.g. *connection pool exhausted* → **Database Team**, *VPN / DNS* → **Network Team**), falling back to **Incident Team**. It **only assigns tickets that have no group**, so an agent's choice is never overridden, and the reason is written into the note. The keyword map is `GROUP_KEYWORDS` in `backend/app/connectors/freshservice.py`.
+
+### Automate with Workflow Automator
+
+First expose the backend publicly. Freshservice cannot reach `localhost`, so use the Render URL or a tunnel such as `ngrok http 8000`. Then in Freshservice go to **Admin → Automation & Productivity → Workflow Automator**.
+
+**New tickets → diagnosis + routing**
+
+1. **Tickets → Event Based Workflows → Create**. Event: **Ticket is Raised** (optionally add a condition, e.g. **Type is Incident**).
+2. Add a **Web Request** node: `POST https://<your-host>/api/v1/freshworks/diagnose`, No Auth, body:
+   ```json
+   { "ticket_id": "{{ticket.id}}", "post_note": true }
+   ```
+   Alternatively use **Trigger Webhook** to `https://<your-host>/api/v1/freshworks/webhook` with `{ "ticket_id": "{{ticket.id_numeric}}" }`; if `FRESHSERVICE_WEBHOOK_SECRET` is set, add the header `X-CodeAtlas-Secret: <secret>`.
+3. **Activate**.
+
+**New changes → blast radius**
+
+1. **Changes → Event Based Workflows → Create**. Event: **Change is created**.
+2. Add a **Web Request** node: `POST https://<your-host>/api/v1/freshworks/changes/analyze`, No Auth, body:
+   ```json
+   { "change_id": "{{change.id}}", "post_note": true }
+   ```
+3. **Test Web Request**, then **Activate**.
+
+Check runs under **Workflow Automator → Execution Logs**. If a tunnel restarts, its URL changes: update the endpoint in both workflows, and type it on a single line (a pasted line break causes an *invalid host* error).
+
+### How each CodeAtlas module maps to Freshservice
+
+| CodeAtlas page | Freshservice module | Status |
+| --- | --- | --- |
+| Freshservice Integration · Incident Room | Tickets, Solutions (KB), Groups | Live: diagnosis note + auto-routing |
+| Requirement Analyzer · Knowledge Graph · Expert Finder | Changes | Live: blast-radius note with CAB reviewers |
+| Agent Activity Log | Private notes | Live: every AI decision is traceable from the ticket |
+| Knowledge Graph | CMDB relationships | Designed: needs a Freshservice plan that includes CMDB |
+| Knowledge Gaps | Problems, Solutions (KB) | Phase 2: recurring incidents → Problem, KB drafts |
+
+---
+
 ## 📊 Demo Scenarios to Try
 
 1. **Seed the database**: Click **Reset & Seed DB** in the bottom-left sidebar of the frontend. This clears databases and populates exactly 20 services, 25 engineers, 5 teams, 50 requirements, 30 incidents, and 100+ dependency relationships.
@@ -145,3 +207,5 @@ This spins up:
 3. **Trace Blast Radius**: Navigate to the **Knowledge Graph**, select a service node (e.g. *Checkout Service*), and click **Blast Radius** or **Dependencies** in the side drawer. Watch the React Flow canvas dynamically fade out unrelated nodes and highlight downstream impact paths in red.
 4. **Scan Knowledge Gaps**: Navigate to **Knowledge Gaps** to see the Compliance Agent scan microservices for missing runbooks, owners, or files and assign a project risk rating.
 5. **Diagnose Outages**: Go to the **Incident Room**, select an active incident (e.g., *INC-212 Stripe Gateway Timeout*), and click **Diagnose Incident**. The Incident Agent will suggest fixes, trace impacted upstream files, and load Confluence runbooks.
+6. **Auto-diagnose a live Freshservice ticket**: With the ticket workflow active, raise a ticket such as *"Database connection timeout on Payment Service, connection pool exhausted after this morning's deploy"*. Within seconds it is assigned to **Database Team** and carries a private CodeAtlas note. Open **Freshservice Integration** and click the brain icon to watch the agent trace.
+7. **Assess a Freshservice Change**: With the change workflow active, create a change such as *"Upgrade SMTP relay config for Notification Service"*. A note appears on the change with affected services, downstream blast radius, risk and suggested CAB reviewers; the same dependents light up under **Knowledge Graph → Blast Radius**.

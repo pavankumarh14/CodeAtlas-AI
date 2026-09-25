@@ -2,12 +2,12 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { 
-  Server, 
-  GitBranch, 
-  Users, 
-  FileText, 
-  AlertOctagon, 
+import {
+  Server,
+  GitBranch,
+  Users,
+  FileText,
+  AlertOctagon,
   ArrowRight,
   Activity,
   Database,
@@ -19,7 +19,9 @@ import {
   BrainCircuit,
   Loader2,
   CheckCircle2,
-  XCircle
+  XCircle,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
 const demoUseCases = [
@@ -91,8 +93,14 @@ interface DiagnosisResult {
   ticket_id: number;
   subject: string;
   diagnosis: {
-    root_cause?: string;
+    suspected_cause?: string;
     dependencies?: string[];
+    known_fixes?: string[];
+    knowledge_base_articles?: { title: string; url: string }[];
+    recent_changes?: {
+      repository: string;
+      changes: { sha: string; url: string; config_changes: { file: string }[]; pull_request?: { number: number; url: string } | null }[];
+    }[];
     escalation_path?: string;
   };
   posted_to_freshservice: boolean;
@@ -123,6 +131,8 @@ export default function HomeDashboard() {
   const [fsTestMessage, setFsTestMessage] = useState<string | null>(null);
   const [diagnosingId, setDiagnosingId] = useState<number | null>(null);
   const [diagnosisResults, setDiagnosisResults] = useState<Record<number, DiagnosisResult>>({});
+  const [collapsedDiagnosis, setCollapsedDiagnosis] = useState<Set<number>>(new Set());
+  const [agentTrace, setAgentTrace] = useState<Record<number, Array<{step: string; agent?: string; status: string; timestamp: string}>>>({});
 
   const fetchFreshserviceStatus = useCallback(async () => {
     try {
@@ -200,6 +210,13 @@ export default function HomeDashboard() {
 
   const diagnoseTicket = async (ticketId: number) => {
     setDiagnosingId(ticketId);
+    setAgentTrace((prev) => ({
+      ...prev,
+      [ticketId]: [
+        { step: "Starting diagnosis...", status: "in_progress", timestamp: new Date().toLocaleTimeString() }
+      ]
+    }));
+
     try {
       const res = await fetch("/api/v1/freshworks/diagnose", {
         method: "POST",
@@ -209,9 +226,31 @@ export default function HomeDashboard() {
       if (res.ok) {
         const data: DiagnosisResult = await res.json();
         setDiagnosisResults((prev) => ({ ...prev, [ticketId]: data }));
+        setAgentTrace((prev) => ({
+          ...prev,
+          [ticketId]: [
+            ...(prev[ticketId] || []),
+            { step: "Diagnosis complete", status: "complete", timestamp: new Date().toLocaleTimeString() }
+          ]
+        }));
+      } else {
+        setAgentTrace((prev) => ({
+          ...prev,
+          [ticketId]: [
+            ...(prev[ticketId] || []),
+            { step: "Diagnosis failed", status: "error", timestamp: new Date().toLocaleTimeString() }
+          ]
+        }));
       }
     } catch (e) {
       console.error("Diagnosis failed", e);
+      setAgentTrace((prev) => ({
+        ...prev,
+        [ticketId]: [
+          ...(prev[ticketId] || []),
+          { step: `Error: ${String(e)}`, status: "error", timestamp: new Date().toLocaleTimeString() }
+        ]
+      }));
     } finally {
       setDiagnosingId(null);
     }
@@ -531,7 +570,7 @@ export default function HomeDashboard() {
                       </span>
                       <div className="flex items-center gap-1.5">
                         <a
-                          href={`https://freshworks065.freshservice.com/helpdesk/tickets/${ticket.id}`}
+                          href={`https://${fsStatus?.domain || "freshworks065.freshservice.com"}/helpdesk/tickets/${ticket.id}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-1.5 rounded-md hover:bg-slate-800 text-slate-500 hover:text-teal-400 transition"
@@ -555,27 +594,101 @@ export default function HomeDashboard() {
                       </div>
                     </div>
 
+                    {/* Agent Trace Panel (while diagnosing) */}
+                    {diagnosingId === ticket.id && agentTrace[ticket.id] && (
+                      <div className="mt-3 p-3 bg-slate-950/60 border border-indigo-500/20 rounded-lg space-y-2 animate-fadeIn">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Agent Execution Trace
+                        </p>
+                        <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                          {agentTrace[ticket.id].map((trace, idx) => (
+                            <div key={idx} className="text-[10px] text-slate-400 flex items-start gap-2">
+                              <span className="mt-0.5 inline-block">
+                                {trace.status === "in_progress" && <Loader2 className="h-2 w-2 animate-spin text-amber-400" />}
+                                {trace.status === "complete" && <CheckCircle2 className="h-2 w-2 text-emerald-400" />}
+                                {trace.status === "error" && <XCircle className="h-2 w-2 text-rose-400" />}
+                              </span>
+                              <div className="flex-1">
+                                <span className="text-slate-300">{trace.step}</span>
+                                <span className="text-slate-600 ml-2">{trace.timestamp}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Inline Diagnosis Result */}
                     {diagnosis && (
                       <div className="mt-3 pt-3 border-t border-slate-800 space-y-1.5 animate-fadeIn">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newCollapsed = new Set(collapsedDiagnosis);
+                            if (newCollapsed.has(ticket.id)) {
+                              newCollapsed.delete(ticket.id);
+                            } else {
+                              newCollapsed.add(ticket.id);
+                            }
+                            setCollapsedDiagnosis(newCollapsed);
+                          }}
+                          className="w-full text-left text-[10px] font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1 hover:text-indigo-200 transition cursor-pointer"
+                        >
+                          {collapsedDiagnosis.has(ticket.id) ? (
+                            <ChevronUp className="h-3 w-3" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3" />
+                          )}
                           <BrainCircuit className="h-3 w-3" /> AI Diagnosis
-                        </p>
-                        <p className="text-xs text-slate-300">
-                          <span className="text-slate-500">Cause:</span> {diagnosis.diagnosis.root_cause || "Unknown"}
-                        </p>
-                        {diagnosis.diagnosis.dependencies && diagnosis.diagnosis.dependencies.length > 0 && (
-                          <p className="text-xs text-slate-300">
-                            <span className="text-slate-500">Impacted:</span> {diagnosis.diagnosis.dependencies.join(", ")}
-                          </p>
-                        )}
-                        <p className="text-xs text-slate-300">
-                          <span className="text-slate-500">Escalation:</span> {diagnosis.diagnosis.escalation_path || "On-Call"}
-                        </p>
-                        {diagnosis.posted_to_freshservice && (
-                          <p className="text-[10px] text-emerald-400 flex items-center gap-1 mt-1">
-                            <CheckCircle2 className="h-3 w-3" /> Note posted to Freshservice
-                          </p>
+                        </button>
+
+                        {!collapsedDiagnosis.has(ticket.id) && (
+                          <div className="space-y-1.5 pt-1">
+                            <p className="text-xs text-slate-300">
+                              <span className="text-slate-500">Cause:</span> {diagnosis.diagnosis.suspected_cause || "Unknown"}
+                            </p>
+                            {diagnosis.diagnosis.dependencies && diagnosis.diagnosis.dependencies.length > 0 && (
+                              <p className="text-xs text-slate-300">
+                                <span className="text-slate-500">Impacted:</span> {diagnosis.diagnosis.dependencies.join(", ")}
+                              </p>
+                            )}
+                            {diagnosis.diagnosis.recent_changes?.flatMap((repo) => repo.changes.filter((c) => c.config_changes.length > 0)).slice(0, 1).map((c) => (
+                              <a
+                                key={c.sha}
+                                href={c.pull_request?.url || c.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1"
+                              >
+                                Config change: {c.config_changes[0].file} ({c.pull_request ? `PR #${c.pull_request.number}` : c.sha}) <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ))}
+                            {diagnosis.diagnosis.known_fixes && diagnosis.diagnosis.known_fixes.length > 0 && (
+                              <p className="text-xs text-slate-300">
+                                <span className="text-slate-500">Fix:</span> {diagnosis.diagnosis.known_fixes[0]}
+                              </p>
+                            )}
+                            {diagnosis.diagnosis.knowledge_base_articles?.map((article) => (
+                              <a
+                                key={article.url}
+                                href={article.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-teal-400 hover:text-teal-300 flex items-center gap-1"
+                              >
+                                KB: {article.title} <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ))}
+                            <p className="text-xs text-slate-300">
+                              <span className="text-slate-500">Escalation:</span> {diagnosis.diagnosis.escalation_path || "On-Call"}
+                            </p>
+                            {diagnosis.posted_to_freshservice && (
+                              <p className="text-[10px] text-emerald-400 flex items-center gap-1 mt-1">
+                                <CheckCircle2 className="h-3 w-3" /> Note posted to Freshservice
+                              </p>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
