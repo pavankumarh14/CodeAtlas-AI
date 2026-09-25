@@ -745,10 +745,32 @@ def _build_diagnosis_note(diagnosis: Dict[str, Any]) -> str:
         for a in diagnosis.get("knowledge_base_articles", [])
     )
     deps = esc(", ".join(_as_text_list(diagnosis.get("dependencies"))) or "None mapped")
+    changes = ""
+    for repo in diagnosis.get("recent_changes") or []:
+        release = repo.get("release")
+        if release:
+            changes += (f"<li>Latest release <a href=\"{esc(release['url'])}\">{esc(release['tag'])}</a> "
+                        f"published {esc((release.get('published_at') or '')[:10])} by {esc(release.get('author') or 'unknown')}</li>")
+        for c in sorted(repo.get("changes", []), key=lambda c: not c["config_changes"])[:3]:
+            links = []
+            if c.get("pull_request"):
+                pr = c["pull_request"]
+                links.append(f"<a href=\"{esc(pr['url'])}\">PR #{pr['number']}</a>")
+            links += [f"<a href=\"{esc(i['url'])}\">issue #{i['number']}: {esc(i['title'])}</a>" for i in c.get("issues", [])]
+            links += [esc(k) for k in c.get("ticket_keys", [])]
+            config = "".join(
+                f"<br/>Config <code>{esc(cfg['file'])}</code>: <code>{'<br/>'.join(esc(l) for l in cfg['diff'][:4])}</code>"
+                for cfg in c["config_changes"][:2]
+            )
+            changes += (f"<li><a href=\"{esc(c['url'])}\">{esc(c['sha'])}</a> by <strong>{esc(c['author'])}</strong> "
+                        f"on {esc(c['date'][:10])}: {esc(c['message'])}"
+                        f"{' · ' + ' · '.join(links) if links else ''}{config}</li>")
     return f"""
     <div style="font-family: Arial, sans-serif; border-left: 4px solid #4f46e5; padding-left: 12px;">
         <p><strong>🤖 {NOTE_MARKER}</strong></p>
+        {f"<p><strong>Affected Service:</strong> {esc(diagnosis['affected_service'])}</p>" if diagnosis.get('affected_service') else ''}
         <p><strong>Suspected Cause:</strong> {esc(str(diagnosis.get('suspected_cause') or 'Not determined'))}</p>
+        {f'<p><strong>Recent Changes (GitHub):</strong></p><ul>{changes}</ul>' if changes else ''}
         <p><strong>Upstream Dependencies:</strong> {deps}</p>
         {f'<p><strong>Related Incidents:</strong></p><ul>{related}</ul>' if related else ''}
         {f'<p><strong>Recommended Fixes:</strong></p><ul>{fixes}</ul>' if fixes else ''}

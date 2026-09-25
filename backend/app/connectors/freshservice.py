@@ -16,7 +16,7 @@ SERVICE_KEYWORDS = {
     "Payment Gateway Service": ["payment", "gateway", "billing", "stripe", "connection pool", "pool exhausted"],
     "Notification Service": ["email", "smtp", "sms", "beacon", "notification", "alert delivery"],
     "Health Monitoring Service": ["health", "monitoring", "telemetry", "guardian", "datahub"],
-    "Alerting Service": ["alerting", "pulse", "command", "pager", "escalation"],
+    "Alerting Service": ["alerting", "alert", "pulse", "command", "pager", "escalation", "on-call", "oncall"],
     "QA Automation Service": ["qa", "automation", "playwright", "test", "pipeline timeout"],
     "Documentation Service": ["documentation", "docanchor", "doc anchor", "runbook", "stale results"],
     "Frontend App": ["frontend", "urbannexus", "urban nexus", "login page", "500 error"],
@@ -35,9 +35,14 @@ def match_service(text: str, service_names: List[str]) -> Optional[str]:
     """Map free text (ticket subject/description) to a known Service name, or None."""
     text = text.lower()
     known = set(service_names)
-    for target_svc, keywords in SERVICE_KEYWORDS.items():
-        if target_svc in known and any(kw in text for kw in keywords):
-            return target_svc
+    # Score every service so the one with the most keyword hits wins, not the first listed
+    scores = {
+        svc: sum(1 for kw in keywords if kw in text)
+        for svc, keywords in SERVICE_KEYWORDS.items() if svc in known
+    }
+    best = max(scores, key=scores.get, default=None)
+    if best and scores[best] > 0:
+        return best
     for svc_name in service_names:
         short = svc_name.lower().replace("service", "").strip()
         if svc_name.lower() in text or (len(short) > 4 and short in text):

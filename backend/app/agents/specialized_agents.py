@@ -3,6 +3,7 @@ import re
 from typing import Dict, Any, List, Optional
 from .base import BaseAgent
 from ..connectors.freshservice import match_service
+from ..connectors.github_changes import GitHubChangeClient, describe_change
 import logging
 
 logger = logging.getLogger(__name__)
@@ -552,6 +553,7 @@ class IncidentContextAgent(BaseAgent):
         service_names = [s["properties"].get("name", "") for s in self.graph.get_nodes("Service")]
         matched_service = match_service(query, [n for n in service_names if n])
         target_service = matched_service or "Checkout Service"
+        unmapped = is_live and not matched_service
 
         deps = self.graph.get_dependency_chain(target_service, "upstream")
         dep_names = []
@@ -562,9 +564,37 @@ class IncidentContextAgent(BaseAgent):
                     dep_names.append(node["name"])
         dep_names = list(set(dep_names))
         # Placeholder dependencies only for the unmatched demo default, not for a service resolved from the graph
-        if not dep_names and not matched_service:
+        if not dep_names and not matched_service and not unmapped:
             dep_names = ["Payment Service", "Inventory Service"]
             nodes_traversed.extend(["Service:Payment Service", "Service:Inventory Service"])
+        if unmapped:
+            dep_names = []
+            trace.append("No service in the ontology matches this ticket; reporting a knowledge gap instead of guessing.")
+
+        # Owning team and repositories of the matched service
+        owner_teams, repo_urls = [], []
+        if matched_service:
+            for n in self.graph.get_neighbors(matched_service, "Service"):
+                node = n["node"]
+                if "Team" in node["labels"] and n["relationship"]["type"] == "OWNS":
+                    owner_teams.append(node["name"])
+                elif "Repository" in node["labels"] and node["properties"].get("url"):
+                    repo_urls.append(node["properties"]["url"])
+
+        # What changed recently? Releases, commits, config diffs and linked PRs/issues from GitHub
+        recent_changes = []
+        for url in repo_urls[:2]:
+            trace.append(f"Checking GitHub for recent releases and changes in {url.split('github.com/')[-1]}...")
+            summary = GitHubChangeClient().recent_changes(url)
+            if summary:
+                recent_changes.append(summary)
+                nodes_traversed.append(f"Repository:{summary['repository']}")
+        all_changes = [c for s in recent_changes for c in s["changes"]]
+        config_changes = [c for c in all_changes if c["config_changes"]]
+        suspect_change = (config_changes or all_changes or [None])[0]
+        if recent_changes:
+            trace.append(f"GitHub returned {len(all_changes)} recent commits ({len(config_changes)} touching config files).")
+        change_authors = list(dict.fromkeys(c["author"] for c in (config_changes or all_changes)))[:2]
 
         # Runbook lookups
         trace.append("Searching Freshservice knowledge base for matching solution articles...")
@@ -575,8 +605,34 @@ class IncidentContextAgent(BaseAgent):
         runbooks = self.mcp_adapters["confluence"].search("runbook")
 
         documents_consulted = [f"Freshservice KB: {a['title']}" for a in kb_articles]
+        documents_consulted += [f"GitHub commit {c['sha']}: {c['message']}" for c in (config_changes or all_changes)[:3]]
         if runbooks:
             documents_consulted.append(f"Confluence: {runbooks[0].get('title')}")
+
+        if unmapped:
+            suspected_cause = "No service in the knowledge graph matches this ticket. Flagged as a knowledge gap; route to general triage."
+        elif suspect_change:
+            suspected_cause = f"Likely caused by a recent change to {target_service}: {describe_change(suspect_change)}"
+        elif dep_names:
+            suspected_cause = f"Failure in {target_service} or its upstream dependencies ({', '.join(dep_names[:3])})"
+        else:
+            suspected_cause = f"Failure within {target_service} (no upstream dependencies mapped in the ontology)"
+
+        escalation_steps = [f"Level 1: {owner_teams[0] if owner_teams else 'On-Call Team'}"]
+        if change_authors:
+            escalation_steps.append(f"Level 2: Change author(s) {', '.join(change_authors)}")
+        escalation_steps.append(f"Level {len(escalation_steps) + 1}: {target_service if not unmapped else 'Service'} SME")
+        escalation_steps.append(f"Level {len(escalation_steps) + 1}: Principal Architect (Pavan Kumar H)")
+        escalation_path = " -> ".join(escalation_steps)
+
+        known_fixes = []
+        if suspect_change and suspect_change["config_changes"]:
+            known_fixes.append(
+                f"Review or revert the config change in {suspect_change['config_changes'][0]['file']} "
+                f"(commit {suspect_change['sha']}" + (f", PR #{suspect_change['pull_request']['number']}" if suspect_change.get("pull_request") else "") + ")"
+            )
+        elif suspect_change:
+            known_fixes.append(f"Check whether commit {suspect_change['sha']} ('{suspect_change['message']}') introduced the regression; roll back if confirmed")
 
         explainability = {
             "why_chosen": f"Matched '{query}' against Freshservice tickets, historical incidents and knowledge base articles. Traced dependency trees for impacted service: '{target_service}'.",
@@ -597,15 +653,22 @@ class IncidentContextAgent(BaseAgent):
               "dependencies": ["string"],
               "known_fixes": ["string"],
               "escalation_path": "string"
-            }"""
+            }
+            If recent GitHub changes are provided, weigh them heavily: a config change shortly before the incident
+            is the most likely cause. Cite the file, author, commit, PR, issue and release by name.
+            If the affected service is 'UNMAPPED', say no service matches and do not invent one."""
             db_context = (
-                f"Incident query: {query}\nLikely affected service: {target_service}\nRelated: {related_incidents}\n"
-                f"Deps: {dep_names}\nFreshservice KB articles: {kb_articles}\nRunbooks: {runbooks}"
+                f"Incident query: {query}\nLikely affected service: {'UNMAPPED' if unmapped else target_service}\n"
+                f"Owning team: {owner_teams}\nRelated: {related_incidents}\n"
+                f"Deps: {dep_names}\nRecent GitHub changes: {recent_changes}\n"
+                f"Freshservice KB articles: {kb_articles}\nRunbooks: {runbooks}"
             )
             llm_res = self.call_llm(system_prompt, db_context)
             try:
                 result = self.parse_llm_json(llm_res)
                 result["knowledge_base_articles"] = kb_articles
+                result["recent_changes"] = recent_changes
+                result["affected_service"] = None if unmapped else target_service
                 urls = {r["id"]: r.get("url") for r in related_incidents}
                 for inc in result.get("related_incidents", []):
                     if isinstance(inc, dict) and urls.get(inc.get("id")):
@@ -621,23 +684,29 @@ class IncidentContextAgent(BaseAgent):
                 logger.warning(f"Failed to parse LLM JSON in {self.name}: {e}")
                 trace.append("Failed to parse LLM JSON. Falling back to dynamic rule-based synthesis.")
 
+        if unmapped:
+            known_fixes += [
+                "Identify the affected service with the requester and map it in the knowledge graph",
+                "Run the Knowledge Gap scan to find unowned or undocumented services",
+            ]
+        else:
+            known_fixes += [
+                f"Verify active connection pool and telemetry socket buffers in {target_service}",
+                f"Inspect dependency health checks ({', '.join(dep_names[:2]) if dep_names else 'monitoring infra'})",
+                "Restart worker pods to clear stale connection backlog"
+            ]
         result = {
-            "suspected_cause": (
-                f"Failure in {target_service} or its upstream dependencies ({', '.join(dep_names[:3])})" if dep_names
-                else f"Failure within {target_service} (no upstream dependencies mapped in the ontology)"
-            ),
+            "affected_service": None if unmapped else target_service,
+            "suspected_cause": suspected_cause,
             "related_incidents": [
                 {"id": r["id"], "title": r["title"], "relevance": "High Similarity", "url": r.get("url")}
                 for r in related_incidents
             ],
             "dependencies": dep_names,
-            "known_fixes": [
-                f"Verify active connection pool and telemetry socket buffers in {target_service}",
-                f"Inspect dependency health checks ({', '.join(dep_names[:2]) if dep_names else 'monitoring infra'})",
-                "Restart worker pods to clear stale connection backlog"
-            ] + [f"Follow Freshservice KB article: {a['title']}" for a in kb_articles],
+            "recent_changes": recent_changes,
+            "known_fixes": known_fixes + [f"Follow Freshservice KB article: {a['title']}" for a in kb_articles],
             "knowledge_base_articles": kb_articles,
-            "escalation_path": f"Level 1: On-Call Team -> Level 2: {target_service} SME -> Level 3: Principal Architect (Pavan Kumar H)"
+            "escalation_path": escalation_path
         }
         trace.append("Troubleshooting response compiled.")
         return {

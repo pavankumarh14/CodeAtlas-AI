@@ -2,12 +2,12 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { 
-  Server, 
-  GitBranch, 
-  Users, 
-  FileText, 
-  AlertOctagon, 
+import {
+  Server,
+  GitBranch,
+  Users,
+  FileText,
+  AlertOctagon,
   ArrowRight,
   Activity,
   Database,
@@ -19,7 +19,9 @@ import {
   BrainCircuit,
   Loader2,
   CheckCircle2,
-  XCircle
+  XCircle,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
 const demoUseCases = [
@@ -95,6 +97,10 @@ interface DiagnosisResult {
     dependencies?: string[];
     known_fixes?: string[];
     knowledge_base_articles?: { title: string; url: string }[];
+    recent_changes?: {
+      repository: string;
+      changes: { sha: string; url: string; config_changes: { file: string }[]; pull_request?: { number: number; url: string } | null }[];
+    }[];
     escalation_path?: string;
   };
   posted_to_freshservice: boolean;
@@ -125,6 +131,7 @@ export default function HomeDashboard() {
   const [fsTestMessage, setFsTestMessage] = useState<string | null>(null);
   const [diagnosingId, setDiagnosingId] = useState<number | null>(null);
   const [diagnosisResults, setDiagnosisResults] = useState<Record<number, DiagnosisResult>>({});
+  const [collapsedDiagnosis, setCollapsedDiagnosis] = useState<Set<number>>(new Set());
 
   const fetchFreshserviceStatus = useCallback(async () => {
     try {
@@ -560,40 +567,73 @@ export default function HomeDashboard() {
                     {/* Inline Diagnosis Result */}
                     {diagnosis && (
                       <div className="mt-3 pt-3 border-t border-slate-800 space-y-1.5 animate-fadeIn">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newCollapsed = new Set(collapsedDiagnosis);
+                            if (newCollapsed.has(ticket.id)) {
+                              newCollapsed.delete(ticket.id);
+                            } else {
+                              newCollapsed.add(ticket.id);
+                            }
+                            setCollapsedDiagnosis(newCollapsed);
+                          }}
+                          className="w-full text-left text-[10px] font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1 hover:text-indigo-200 transition cursor-pointer"
+                        >
+                          {collapsedDiagnosis.has(ticket.id) ? (
+                            <ChevronUp className="h-3 w-3" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3" />
+                          )}
                           <BrainCircuit className="h-3 w-3" /> AI Diagnosis
-                        </p>
-                        <p className="text-xs text-slate-300">
-                          <span className="text-slate-500">Cause:</span> {diagnosis.diagnosis.suspected_cause || "Unknown"}
-                        </p>
-                        {diagnosis.diagnosis.dependencies && diagnosis.diagnosis.dependencies.length > 0 && (
-                          <p className="text-xs text-slate-300">
-                            <span className="text-slate-500">Impacted:</span> {diagnosis.diagnosis.dependencies.join(", ")}
-                          </p>
-                        )}
-                        {diagnosis.diagnosis.known_fixes && diagnosis.diagnosis.known_fixes.length > 0 && (
-                          <p className="text-xs text-slate-300">
-                            <span className="text-slate-500">Fix:</span> {diagnosis.diagnosis.known_fixes[0]}
-                          </p>
-                        )}
-                        {diagnosis.diagnosis.knowledge_base_articles?.map((article) => (
-                          <a
-                            key={article.url}
-                            href={article.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-teal-400 hover:text-teal-300 flex items-center gap-1"
-                          >
-                            KB: {article.title} <ExternalLink className="h-3 w-3" />
-                          </a>
-                        ))}
-                        <p className="text-xs text-slate-300">
-                          <span className="text-slate-500">Escalation:</span> {diagnosis.diagnosis.escalation_path || "On-Call"}
-                        </p>
-                        {diagnosis.posted_to_freshservice && (
-                          <p className="text-[10px] text-emerald-400 flex items-center gap-1 mt-1">
-                            <CheckCircle2 className="h-3 w-3" /> Note posted to Freshservice
-                          </p>
+                        </button>
+
+                        {!collapsedDiagnosis.has(ticket.id) && (
+                          <div className="space-y-1.5 pt-1">
+                            <p className="text-xs text-slate-300">
+                              <span className="text-slate-500">Cause:</span> {diagnosis.diagnosis.suspected_cause || "Unknown"}
+                            </p>
+                            {diagnosis.diagnosis.dependencies && diagnosis.diagnosis.dependencies.length > 0 && (
+                              <p className="text-xs text-slate-300">
+                                <span className="text-slate-500">Impacted:</span> {diagnosis.diagnosis.dependencies.join(", ")}
+                              </p>
+                            )}
+                            {diagnosis.diagnosis.recent_changes?.flatMap((repo) => repo.changes.filter((c) => c.config_changes.length > 0)).slice(0, 1).map((c) => (
+                              <a
+                                key={c.sha}
+                                href={c.pull_request?.url || c.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1"
+                              >
+                                Config change: {c.config_changes[0].file} ({c.pull_request ? `PR #${c.pull_request.number}` : c.sha}) <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ))}
+                            {diagnosis.diagnosis.known_fixes && diagnosis.diagnosis.known_fixes.length > 0 && (
+                              <p className="text-xs text-slate-300">
+                                <span className="text-slate-500">Fix:</span> {diagnosis.diagnosis.known_fixes[0]}
+                              </p>
+                            )}
+                            {diagnosis.diagnosis.knowledge_base_articles?.map((article) => (
+                              <a
+                                key={article.url}
+                                href={article.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-teal-400 hover:text-teal-300 flex items-center gap-1"
+                              >
+                                KB: {article.title} <ExternalLink className="h-3 w-3" />
+                              </a>
+                            ))}
+                            <p className="text-xs text-slate-300">
+                              <span className="text-slate-500">Escalation:</span> {diagnosis.diagnosis.escalation_path || "On-Call"}
+                            </p>
+                            {diagnosis.posted_to_freshservice && (
+                              <p className="text-[10px] text-emerald-400 flex items-center gap-1 mt-1">
+                                <CheckCircle2 className="h-3 w-3" /> Note posted to Freshservice
+                              </p>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}

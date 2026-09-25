@@ -1,15 +1,17 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { 
-  AlertTriangle, 
-  Search, 
-  HelpCircle, 
-  Loader2, 
-  Flame, 
-  Heart, 
-  ShieldAlert, 
-  History 
+import {
+  AlertTriangle,
+  Search,
+  HelpCircle,
+  Loader2,
+  Flame,
+  Heart,
+  ShieldAlert,
+  History,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
 export default function IncidentRoom() {
@@ -20,6 +22,7 @@ export default function IncidentRoom() {
   const [selectedIncident, setSelectedIncident] = useState("INC-212");
   const [customQuery, setCustomQuery] = useState("Checkout latency spiked above 2000ms");
   const [loading, setLoading] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [troubleshootResult, setTroubleshootResult] = useState<any>({
     related_incidents: [
       { id: "INC-101", title: "INC-101: Checkout latency spikes caused by database lockups", relevance: "High Similarity (DB / Network Bottleneck)" },
@@ -211,12 +214,39 @@ export default function IncidentRoom() {
 
           {/* Root cause dependencies & fixes */}
           <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-4 md:col-span-2">
-            <h3 className="font-bold text-sm text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+            <button
+              type="button"
+              onClick={() => {
+                const newCollapsed = new Set(collapsedSections);
+                if (newCollapsed.has("diagnosis")) {
+                  newCollapsed.delete("diagnosis");
+                } else {
+                  newCollapsed.add("diagnosis");
+                }
+                setCollapsedSections(newCollapsed);
+              }}
+              className="w-full text-left font-bold text-sm text-white flex items-center gap-2 border-b border-slate-800 pb-3 hover:text-indigo-400 transition cursor-pointer"
+            >
+              {collapsedSections.has("diagnosis") ? (
+                <ChevronUp className="h-4.5 w-4.5 text-indigo-400" />
+              ) : (
+                <ChevronDown className="h-4.5 w-4.5 text-indigo-400" />
+              )}
               <ShieldAlert className="h-4.5 w-4.5 text-indigo-400" />
               Diagnosed Root Causes & Runbooks
-            </h3>
-            
+            </button>
+
+            {!collapsedSections.has("diagnosis") && (
             <div className="space-y-4">
+              {troubleshootResult.suspected_cause && (
+                <div className="p-3 bg-rose-500/5 border border-rose-500/20 rounded-lg">
+                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
+                    Suspected Cause{troubleshootResult.affected_service ? ` · ${troubleshootResult.affected_service}` : ""}
+                  </span>
+                  <p className="text-xs font-semibold text-rose-300 mt-1">{troubleshootResult.suspected_cause}</p>
+                </div>
+              )}
+
               <div>
                 <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Impacted Upstream Dependencies</span>
                 <div className="flex flex-wrap gap-2 mt-1.5">
@@ -240,6 +270,77 @@ export default function IncidentRoom() {
                 </ul>
               </div>
 
+              {troubleshootResult.recent_changes?.some((repo: any) => repo.release || repo.changes?.length > 0) && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newCollapsed = new Set(collapsedSections);
+                      if (newCollapsed.has("recent-changes")) {
+                        newCollapsed.delete("recent-changes");
+                      } else {
+                        newCollapsed.add("recent-changes");
+                      }
+                      setCollapsedSections(newCollapsed);
+                    }}
+                    className="text-left w-full text-[10px] font-semibold text-slate-500 uppercase tracking-widest hover:text-slate-400 transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    {collapsedSections.has("recent-changes") ? (
+                      <ChevronUp className="h-3 w-3" />
+                    ) : (
+                      <ChevronDown className="h-3 w-3" />
+                    )}
+                    Recent Changes (GitHub)
+                  </button>
+                  {!collapsedSections.has("recent-changes") && (
+                  <div className="space-y-2 mt-2">
+                    {troubleshootResult.recent_changes.map((repo: any) => (
+                      <div key={repo.repository} className="text-xs bg-slate-950 p-3 rounded-lg border border-slate-850 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <a href={repo.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-200 hover:text-teal-300 font-mono">{repo.repository}</a>
+                          {repo.release && (
+                            <a href={repo.release.url} target="_blank" rel="noopener noreferrer" className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold">
+                              Release {repo.release.tag} · {repo.release.published_at?.slice(0, 10)}
+                            </a>
+                          )}
+                        </div>
+                        {[...repo.changes].sort((a: any, b: any) => b.config_changes.length - a.config_changes.length).slice(0, 4).map((c: any) => (
+                          <div key={c.sha} className={`p-2 rounded border ${c.config_changes.length ? "border-amber-500/30 bg-amber-500/5" : "border-slate-800"}`}>
+                            <p className="text-slate-300">
+                              <a href={c.url} target="_blank" rel="noopener noreferrer" className="font-mono text-indigo-400 hover:text-indigo-300">{c.sha}</a>{" "}
+                              <span className="font-semibold text-white">{c.author}</span>{" "}
+                              <span className="text-slate-500">{c.date?.slice(0, 10)}</span> · {c.message}
+                            </p>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              {c.pull_request && (
+                                <a href={c.pull_request.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-teal-400 hover:text-teal-300">PR #{c.pull_request.number}: {c.pull_request.title}</a>
+                              )}
+                              {c.issues?.map((i: any) => (
+                                <a key={i.number} href={i.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-teal-400 hover:text-teal-300">Issue #{i.number}: {i.title}</a>
+                              ))}
+                              {c.ticket_keys?.map((k: string) => (
+                                <span key={k} className="text-[10px] font-mono text-slate-400">{k}</span>
+                              ))}
+                            </div>
+                            {c.config_changes.map((cfg: any) => (
+                              <div key={cfg.file} className="mt-1.5">
+                                <span className="text-[10px] font-semibold text-amber-400">Config changed: {cfg.file}</span>
+                                <pre className="mt-1 p-2 rounded bg-black/40 text-[10px] font-mono whitespace-pre-wrap">
+                                  {cfg.diff.slice(0, 6).map((line: string, idx: number) => (
+                                    <span key={idx} className={line.startsWith("+") ? "text-emerald-400 block" : "text-rose-400 block"}>{line}</span>
+                                  ))}
+                                </pre>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  )}
+                </div>
+              )}
+
               {troubleshootResult.knowledge_base_articles?.length > 0 && (
                 <div>
                   <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Freshservice Knowledge Base</span>
@@ -259,6 +360,7 @@ export default function IncidentRoom() {
                 <p className="text-xs font-semibold font-mono text-emerald-400 mt-1">{troubleshootResult.escalation_path}</p>
               </div>
             </div>
+            )}
           </div>
         </div>
       )}
