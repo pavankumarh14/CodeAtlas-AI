@@ -70,7 +70,7 @@ def new_slide(title, kicker=None, notes=None):
     if kicker:
         text(s, Inches(0.7), Inches(0.5), Inches(10), Inches(0.35), kicker.upper(), size=12, color=TEAL, bold=True)
     text(s, Inches(0.7), Inches(0.85), Inches(12), Inches(0.9), title, size=32, bold=True)
-    text(s, Inches(11.6), Inches(7.0), Inches(1.1), Inches(0.3), f"CodeAtlas AI  ·  {len(prs.slides)}", size=10, color=MUTED, align=PP_ALIGN.RIGHT)
+    text(s, Inches(10.1), Inches(7.0), Inches(2.6), Inches(0.3), f"CodeAtlas AI  ·  {len(prs.slides)}", size=10, color=MUTED, align=PP_ALIGN.RIGHT)
     if notes:
         s.notes_slide.notes_text_frame.text = notes
     return s
@@ -120,14 +120,50 @@ text(s, Inches(0.7), Inches(6.35), Inches(12), Inches(0.5),
 
 # 3. Why now
 s = new_slide("Why now", "Rationale",
-              notes="Three reasons. Freshworks now ships official MCP servers and REST v2 plus workflow webhooks, so agents can act on live tickets. LLMs are cheap and accurate when grounded in a graph. And systems keep fragmenting.")
-cards = [
-    ("Freshworks opened the door", "Official Freshservice & Freshdesk MCP servers (Freshdesk MCP generally available Sep 2026), REST v2 and Workflow Automator webhooks let agents read and act on live tickets.", TEAL),
-    ("LLMs are ready, if grounded", "LLM reasoning is cheap and fluent. A knowledge graph keeps it factual: answers cite real services, owners and incidents.", INDIGO),
-    ("Systems keep fragmenting", "More microservices, more tools, more handoffs. Spreadsheet catalogues and tribal knowledge don't scale, and slow incidents cost revenue.", ROSE),
+              notes="Three shifts. Freshworks now exposes live tickets and changes to outside agents: REST v2, Workflow Automator events, official MCP servers and FDK apps. Agents have matured from answering to acting: specialised agents hand off work, and a knowledge graph keeps the LLM factual. Meanwhile engineering context keeps fragmenting. Together they make an agent that works inside Freshservice possible today; the strip at the bottom is exactly what we built.")
+text(s, Inches(0.7), Inches(1.65), Inches(11.9), Inches(0.4),
+     "Three shifts make an AI agent that works inside Freshservice possible today.", size=16, color=MUTED)
+pillars = [
+    ("Freshworks is open", TEAL, [
+        "REST v2 + Workflow Automator push every ticket and change to agents",
+        "Official Freshservice & Freshdesk MCP servers (Freshdesk GA Sep 2026)",
+        "FDK apps can run agents inside the product UI",
+    ]),
+    ("Agents now act", INDIGO, [
+        "Specialised agents hand off work: impact → ontology → experts",
+        "LLM reasoning is cheap; a knowledge graph keeps it factual and cited",
+        "Agents write back: notes, routing, change risk",
+    ]),
+    ("Context is scattered", ROSE, [
+        "Ownership and dependencies live in GitHub, runbooks and people's heads",
+        "Service desks see ticket text, not the system behind it",
+        "Every wrong escalation adds to MTTR and lost revenue",
+    ]),
 ]
-for i, (h, b, c) in enumerate(cards):
-    card(s, Inches(0.7) + i * Inches(4.07), Inches(2.2), Inches(3.8), Inches(3.9), h, b, accent=c, body_size=15)
+cw, cy, chh = Inches(3.8), Inches(2.25), Inches(2.8)
+for i, (h, c, bullets) in enumerate(pillars):
+    x = Inches(0.7) + i * Inches(4.05)
+    box(s, x, cy, cw, chh)
+    box(s, x, cy + Inches(0.28), Inches(0.06), Inches(0.4), fill=c, line=None, shape=MSO_SHAPE.RECTANGLE)
+    text(s, x + Inches(0.3), cy + Inches(0.26), cw - Inches(0.5), Inches(0.45), h, size=17, bold=True)
+    text(s, x + Inches(0.3), cy + Inches(0.85), cw - Inches(0.5), chh - Inches(1.0),
+         [[("•  ", {"color": c, "bold": True}), (b, {})] for b in bullets], size=13, color=MUTED, spacing=1.1)
+text(s, Inches(0.7), Inches(5.3), Inches(11.9), Inches(0.3), "WHAT THIS MAKES POSSIBLE: CODEATLAS INSIDE FRESHSERVICE", size=11, color=TEAL, bold=True)
+flow = [
+    ("Ticket or change", "raised in Freshservice", WHITE),
+    ("Workflow Automator", "calls CodeAtlas instantly", WHITE),
+    ("8 AI agents + graph", "GitHub · KB · LLM reasoning", INDIGO),
+    ("Written back", "diagnosis, routing, blast radius", TEAL),
+]
+fw, fg, fy, fh = Inches(2.7), Inches(0.37), Inches(5.65), Inches(1.0)
+for i, (h, sub, c) in enumerate(flow):
+    x = Inches(0.7) + i * (fw + fg)
+    box(s, x, fy, fw, fh, line=c if c != WHITE else BORDER)
+    text(s, x + Inches(0.2), fy + Inches(0.18), fw - Inches(0.4), Inches(0.35), h, size=14, bold=True, color=c)
+    text(s, x + Inches(0.2), fy + Inches(0.55), fw - Inches(0.4), Inches(0.35), sub, size=11, color=MUTED)
+    if i < len(flow) - 1:
+        a = s.shapes.add_shape(MSO_SHAPE.RIGHT_ARROW, x + fw + Inches(0.07), fy + fh / 2 - Inches(0.12), Inches(0.23), Inches(0.24))
+        a.fill.solid(); a.fill.fore_color.rgb = MUTED; a.line.fill.background()
 
 # 4. Competition
 s = new_slide("Competitive landscape", "Who else solves this",
