@@ -274,29 +274,108 @@ for i, (h, b) in enumerate(steps):
     text(s, x + Inches(1.1), y + Inches(0.62), Inches(4.55), Inches(0.6), b, size=13, color=MUTED)
 
 # 7. Who & why
-s = new_slide("Who it's for, and why they'll want it", "Target customers & value",
-              notes="Primary buyer: mid-size software companies running engineering incidents in Freshservice. Secondary: MSPs who constantly face unfamiliar client systems. The value in one line is on the slide.")
-card(s, Inches(0.7), Inches(2.0), Inches(5.8), Inches(2.3), "Primary",
-     "Mid-size software & digital companies (200–2,000 employees) running IT/engineering incidents in Freshservice, with 20+ microservices and several teams.", accent=TEAL, body_size=15)
-card(s, Inches(6.8), Inches(2.0), Inches(5.8), Inches(2.3), "Secondary",
-     "Freshservice MSPs supporting many client environments who need fast context on unfamiliar systems.", accent=INDIGO, body_size=15)
-text(s, Inches(0.7), Inches(4.55), Inches(11.9), Inches(0.35), "USERS:  service-desk agents  ·  on-call / SRE  ·  tech leads & architects  ·  new engineers", size=12, color=MUTED, bold=True)
-box(s, Inches(0.7), Inches(5.1), Inches(11.9), Inches(1.6), fill=RGBColor(0x0F, 0x2A, 0x2E), line=TEAL)
-text(s, Inches(1.0), Inches(5.25), Inches(11.3), Inches(1.3),
-     "Every incident arrives already diagnosed: likely service, dependencies, past incidents, runbook and escalation path. Teams resolve faster, escalate to the right owner first time, and know what breaks before a change ships.",
+s = new_slide("Who it's for", "Target customers & users",
+              notes="Primary buyer: mid-size software companies running engineering incidents in Freshservice. Secondary: MSPs who constantly face unfamiliar client systems. Then walk the four users left to right: each gets something different from the same knowledge graph, and three of the four get it without leaving Freshservice.")
+card(s, Inches(0.7), Inches(1.9), Inches(5.8), Inches(1.75), "Primary",
+     "Mid-size software & digital companies (200–2,000 employees) running IT/engineering incidents in Freshservice, with 20+ microservices and several teams.", accent=TEAL, body_size=14)
+card(s, Inches(6.8), Inches(1.9), Inches(5.8), Inches(1.75), "Secondary",
+     "Freshservice MSPs supporting many client environments who need fast context on unfamiliar systems.", accent=INDIGO, body_size=14)
+text(s, Inches(0.7), Inches(3.9), Inches(11.9), Inches(0.3), "WHO USES IT, AND WHAT THEY GET", size=11, color=TEAL, bold=True)
+users = [
+    ("Service-desk agents", "Tickets arrive diagnosed and already in the right group, with no guessing which team owns it.", "Ticket note + auto-routing", TEAL),
+    ("On-call / SRE", "Suspected cause, the recent commit or config change behind it, past incidents, runbook, who to call.", "Ticket note · Incident Room", ROSE),
+    ("Change managers / CAB", "Blast radius, risk and suggested reviewers on every new change, before it is approved.", "Change note · Knowledge Graph", AMBER),
+    ("Tech leads & new hires", "Impact of a new requirement, owners and experts, and a map of how the system fits together.", "Analyzer · Experts · Graph", INDIGO),
+]
+uw, ug, uy, uh = Inches(2.8), Inches(0.233), Inches(4.2), Inches(1.75)
+for i, (role, gets, where, c) in enumerate(users):
+    x = Inches(0.7) + i * (uw + ug)
+    box(s, x, uy, uw, uh)
+    box(s, x, uy, uw, Inches(0.06), fill=c, line=None, shape=MSO_SHAPE.RECTANGLE)
+    text(s, x + Inches(0.2), uy + Inches(0.2), uw - Inches(0.4), Inches(0.3), role, size=14, bold=True)
+    text(s, x + Inches(0.2), uy + Inches(0.55), uw - Inches(0.4), Inches(0.85), gets, size=11, color=MUTED, spacing=1.1)
+    text(s, x + Inches(0.2), uy + uh - Inches(0.35), uw - Inches(0.4), Inches(0.25), where, size=10, color=c, bold=True)
+box(s, Inches(0.7), Inches(6.12), Inches(11.9), Inches(0.72), fill=RGBColor(0x0F, 0x2A, 0x2E), line=TEAL)
+text(s, Inches(1.0), Inches(6.17), Inches(11.3), Inches(0.62),
+     "Every incident and change arrives with engineering context: faster resolution, the right owner first time, and no surprises when a change ships.",
+     size=15, anchor=MSO_ANCHOR.MIDDLE)
+
+# Value proposition
+s = new_slide("Why customers will want it", "Value proposition",
+              notes="Read the statement as written; it is the answer to 'why would I buy this'. Then contrast: doing nothing means people hunt for context; the alternatives are either heavy (ServiceNow CMDB), disconnected from tickets (developer portals), or blind to the system (built-in copilots). Close on the proof strip: everything on it is shown live in the demo.")
+box(s, Inches(0.7), Inches(1.85), Inches(11.9), Inches(1.45), fill=RGBColor(0x0F, 0x2A, 0x2E), line=TEAL)
+text(s, Inches(1.0), Inches(1.95), Inches(11.3), Inches(1.25),
+     [[("Every Freshservice ticket and change arrives already diagnosed, routed to the right team and risk-assessed, ", {"bold": True, "color": WHITE}),
+       ("without anyone leaving Freshservice. Teams stop hunting for context across GitHub, runbooks and chat, resolve faster, and know what breaks before a change ships.", {"color": WHITE})]],
      size=18, anchor=MSO_ANCHOR.MIDDLE)
+compare = [
+    ("Instead of doing nothing", ROSE, [
+        ("Today", "L1 guesses the team; tickets bounce between queues"),
+        ("Today", "On-call spends the first part of every incident hunting for context"),
+        ("Today", "Changes are approved without knowing what depends on them"),
+    ]),
+    ("Instead of an alternative", INDIGO, [
+        ("ServiceNow CMDB", "heavy rollout, relationships kept up by hand"),
+        ("Developer portals", "know owners, but never see a ticket"),
+        ("Built-in AI copilots", "read ticket text, not the system behind it"),
+    ]),
+]
+for i, (h, c, rows) in enumerate(compare):
+    x = Inches(0.7) + i * Inches(6.1)
+    box(s, x, Inches(3.55), Inches(5.8), Inches(2.2))
+    box(s, x, Inches(3.55 + 0.28), Inches(0.06), Inches(0.4), fill=c, line=None, shape=MSO_SHAPE.RECTANGLE)
+    text(s, x + Inches(0.3), Inches(3.55 + 0.25), Inches(5.2), Inches(0.4), h, size=17, bold=True)
+    text(s, x + Inches(0.3), Inches(3.55 + 0.8), Inches(5.2), Inches(1.3),
+         [[(f"{k}: " if k != "Today" else "✕  ", {"color": c, "bold": True}), (v, {})] for k, v in rows], size=13, color=MUTED, spacing=1.1)
+text(s, Inches(0.7), Inches(5.95), Inches(11.9), Inches(0.3), "CODEATLAS INSTEAD  ·  SHOWN LIVE IN THE DEMO", size=11, color=TEAL, bold=True)
+proofs = ["Ticket auto-routed, zero clicks", "Change note shows blast radius", "Every claim cites its evidence"]
+for i, pr in enumerate(proofs):
+    x = Inches(0.7) + i * Inches(4.0)
+    box(s, x, Inches(6.25), Inches(3.8), Inches(0.55), line=TEAL)
+    text(s, x + Inches(0.2), Inches(6.25 + 0.15), Inches(3.4), Inches(0.3), "✓  " + pr, size=12, color=WHITE, bold=True)
 
 # 8. Business model
 s = new_slide("Business model", "Pricing · go-to-market · cost",
-              notes="All figures are working assumptions to be validated with design partners. Pricing is a Marketplace add-on per agent; the free tier drives adoption; the demo video shows a ticket that diagnoses itself.")
-card(s, Inches(0.7), Inches(2.0), Inches(3.8), Inches(3.9), "Pricing",
-     ["Marketplace add-on for Freshservice Pro & Enterprise", "$8 / agent / month", "Free tier: 25 diagnoses / month", "30-day trial of auto-diagnosis"], accent=TEAL, body_size=14)
-card(s, Inches(4.77), Inches(2.0), Inches(3.8), Inches(3.9), "Go-to-market",
-     ["Freshworks Marketplace listing + in-product banner", "5-minute onboarding: API key → Sync", "Email trial offer to Pro/Enterprise admins", "3–5 design partners for case studies"], accent=INDIGO, body_size=14)
-card(s, Inches(8.84), Inches(2.0), Inches(3.8), Inches(3.9), "Cost to MVP",
-     ["3 engineers + part-time designer & PM", "~3 months to production MVP", "~$90–110K (salaries, LLM, hosting)", "Illustrative ARR: 100 customers × 30 agents × $8 × 12 ≈ $288K"], accent=AMBER, body_size=14)
-tag(s, Inches(0.7), Inches(6.25), "ASSUMPTIONS", w=Inches(1.5))
-text(s, Inches(2.35), Inches(6.29), Inches(10), Inches(0.35), "Prices, costs and ARR are working estimates, to be validated with design partners.", size=12, color=MUTED)
+              notes="All figures are working assumptions to be validated with design partners. Pricing: a free tier gets the graph into Freshservice; Pro is where it runs itself on every ticket; Enterprise adds change risk and more connectors. Go-to-market lives inside the Freshworks ecosystem: Marketplace, a 5-minute connect, and a demo of a ticket diagnosing itself. Economics: roughly $100K to reach a production MVP against an illustrative $288K ARR, with LLM cost in cents per diagnosis.")
+text(s, Inches(0.7), Inches(1.75), Inches(11.9), Inches(0.3), "PRICING  ·  FRESHWORKS MARKETPLACE ADD-ON FOR FRESHSERVICE PRO & ENTERPRISE", size=11, color=TEAL, bold=True)
+tiers = [
+    ("FREE", "Free", MUTED, ["Knowledge graph explorer", "Manual AI Diagnose, 25 tickets / month", "Gets the graph into Freshservice"]),
+    ("PRO", "$8 / agent / month", TEAL, ["Auto-diagnosis on every new ticket", "Auto-routing to the right group", "30-day free trial"]),
+    ("ENTERPRISE  ·  LATER", "Custom", AMBER, ["Change blast radius & CAB reviewers", "Jira · Confluence · Slack connectors", "CMDB sync on eligible plans"]),
+]
+tw, tg, ty, th = Inches(3.8), Inches(0.25), Inches(2.05), Inches(1.9)
+for i, (name, price, c, feats) in enumerate(tiers):
+    x = Inches(0.7) + i * (tw + tg)
+    box(s, x, ty, tw, th, line=c if c != MUTED else BORDER)
+    text(s, x + Inches(0.25), ty + Inches(0.18), tw - Inches(0.5), Inches(0.25), name, size=11, color=c, bold=True)
+    text(s, x + Inches(0.25), ty + Inches(0.42), tw - Inches(0.5), Inches(0.45), price, size=22, bold=True, color=WHITE)
+    text(s, x + Inches(0.25), ty + Inches(1.0), tw - Inches(0.5), Inches(0.85),
+         [[("•  ", {"color": c, "bold": True}), (f, {})] for f in feats], size=12, color=MUTED, spacing=1.05)
+gy, gh = Inches(4.2), Inches(2.3)
+box(s, Inches(0.7), gy, Inches(7.05), gh)
+box(s, Inches(0.7), gy + Inches(0.25), Inches(0.06), Inches(0.4), fill=INDIGO, line=None, shape=MSO_SHAPE.RECTANGLE)
+text(s, Inches(1.0), gy + Inches(0.22), Inches(6.5), Inches(0.4), "Go-to-market: inside the Freshworks ecosystem", size=16, bold=True)
+steps = [
+    ("Discover", "Marketplace listing + in-product banner for eligible admins"),
+    ("Try", "Connect in 5 minutes: paste API key → Sync → see your graph"),
+    ("Convert", "Trial email to Pro/Enterprise admins + \"a ticket diagnoses itself\" video"),
+    ("Prove", "3–5 design partners, case studies with measured MTTR drop"),
+]
+text(s, Inches(1.0), gy + Inches(0.75), Inches(6.5), Inches(1.5),
+     [[(f"{i + 1}. {k}   ", {"color": INDIGO, "bold": True}), (v, {})] for i, (k, v) in enumerate(steps)], size=12, color=MUTED, spacing=1.05)
+cx = Inches(8.0)
+box(s, cx, gy, Inches(4.6), gh)
+box(s, cx, gy + Inches(0.25), Inches(0.06), Inches(0.4), fill=AMBER, line=None, shape=MSO_SHAPE.RECTANGLE)
+text(s, cx + Inches(0.3), gy + Inches(0.22), Inches(4.1), Inches(0.4), "Cost & economics", size=16, bold=True)
+text(s, cx + Inches(0.3), gy + Inches(0.75), Inches(4.1), Inches(1.5), [
+    [("MVP  ", {"color": AMBER, "bold": True}), ("~$90–110K in ~3 months", {})],
+    [("Team  ", {"color": AMBER, "bold": True}), ("3 engineers + part-time design & PM", {})],
+    [("Scope  ", {"color": AMBER, "bold": True}), ("auth, multi-tenant, Marketplace review", {})],
+    [("Run  ", {"color": AMBER, "bold": True}), ("LLM cost in cents per diagnosis", {})],
+    [("ARR  ", {"color": AMBER, "bold": True}), ("≈ $288K illustrative (100 × 30 × $8 × 12)", {})],
+], size=12, color=MUTED, spacing=1.05)
+tag(s, Inches(0.7), Inches(6.62), "ASSUMPTIONS", w=Inches(1.5))
+text(s, Inches(2.35), Inches(6.66), Inches(7.5), Inches(0.3), "Prices, costs and ARR are working estimates, to be validated with design partners.", size=11, color=MUTED)
 
 # 9. Metrics
 s = new_slide("How we'll know it worked", "Success metrics · 6 months after launch",
